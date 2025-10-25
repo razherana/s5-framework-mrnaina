@@ -9,11 +9,34 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import mg.razherana.framework.App;
 import mg.razherana.framework.exceptions.HttpException;
 import mg.razherana.framework.exceptions.NotFoundException;
 
 @WebServlet("/")
 public class FrontServlet extends HttpServlet {
+
+  private App app;
+
+  @Override
+  public void init() throws ServletException {
+    super.init();
+
+    // Initialize the application
+    app = new App(null);
+
+    // Get the base package from init parameters
+    String basePackage = getServletContext().getInitParameter(App.InitKey.BASE_PACKAGE.getKey());
+
+    if (basePackage == null || basePackage.isEmpty()) {
+      throw new ServletException("Base package not specified in servlet init parameters. Please set '"
+          + App.InitKey.BASE_PACKAGE.getKey() + "' parameter.");
+    }
+
+    // Find all controllers at startup
+    app.scanControllers(basePackage);
+  }
+
   private boolean resourceExists(HttpServletRequest request) {
     try {
       URL resource = getServletContext().getResource(request.getRequestURI());
