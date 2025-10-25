@@ -26,7 +26,7 @@ public class FrontServlet extends HttpServlet {
     app = new App(null);
 
     // Get the base package from init parameters
-    String basePackage = getServletConfig().getInitParameter(App.InitKey.BASE_PACKAGE.getKey());
+    String basePackage = getServletContext().getInitParameter(App.InitKey.BASE_PACKAGE.getKey());
 
     if (basePackage == null || basePackage.isEmpty()) {
       throw new ServletException("Base package not specified in servlet init parameters. Please set '"
