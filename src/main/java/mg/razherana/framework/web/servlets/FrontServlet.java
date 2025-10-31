@@ -1,4 +1,4 @@
-package mg.razherana.framework.servlets;
+package mg.razherana.framework.web.servlets;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -10,8 +10,11 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import mg.razherana.framework.App;
-import mg.razherana.framework.exceptions.HttpException;
-import mg.razherana.framework.exceptions.NotFoundException;
+import mg.razherana.framework.App.InitKey;
+import mg.razherana.framework.web.containers.WebRouteContainer;
+import mg.razherana.framework.web.exceptions.http.HttpException;
+import mg.razherana.framework.web.exceptions.http.NotFoundException;
+import mg.razherana.framework.web.routing.WebExecutor;
 
 @WebServlet("/")
 public class FrontServlet extends HttpServlet {
@@ -23,18 +26,21 @@ public class FrontServlet extends HttpServlet {
     super.init();
 
     // Initialize the application
-    app = new App(null);
+    app = new App(null, null);
 
     // Get the base package from init parameters
-    String basePackage = getServletContext().getInitParameter(App.InitKey.BASE_PACKAGE.getKey());
+    String basePackage = getServletContext().getInitParameter(InitKey.BASE_PACKAGE.getKey());
 
     if (basePackage == null || basePackage.isEmpty()) {
       throw new ServletException("Base package not specified in servlet init parameters. Please set '"
-          + App.InitKey.BASE_PACKAGE.getKey() + "' parameter.");
+          + InitKey.BASE_PACKAGE.getKey() + "' parameter.");
     }
 
     // Find all controllers at startup
     app.scanControllers(basePackage);
+
+    // Initialize WebFinder and WebMapper
+    app.initWeb();
   }
 
   private boolean resourceExists(HttpServletRequest request) {
@@ -112,13 +118,20 @@ public class FrontServlet extends HttpServlet {
   private void handleRequest(HttpServletRequest request, HttpServletResponse response)
       throws ServletException, IOException {
     try {
-      // Check if a resource exists for the requested URI
-      if (!resourceExists(request)) {
+      WebRouteContainer webRouteContainer = app.getWebMapper().findRouteMethod(request);
+
+      // Check if route found
+      if (webRouteContainer == null) {
         throw new NotFoundException("Resource not found: " + request.getRequestURI());
       }
+
+      // Execute the route
+      WebExecutor webExecutor = new WebExecutor(webRouteContainer);
+      webExecutor.execute(request, response);
     } catch (HttpException httpEx) {
       response.sendError(httpEx.getStatusCode(), httpEx.getMessage());
     } catch (Exception e) {
+      e.printStackTrace();
     }
   }
 }

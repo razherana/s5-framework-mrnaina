@@ -1,4 +1,6 @@
-package mg.razherana.framework.exceptions;
+package mg.razherana.framework.web.exceptions.http;
+
+import mg.razherana.framework.exceptions.FrameworkException;
 
 public class HttpException extends FrameworkException {
   int statusCode;
