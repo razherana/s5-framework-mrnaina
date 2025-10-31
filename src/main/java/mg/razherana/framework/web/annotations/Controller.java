@@ -1,4 +1,4 @@
-package mg.razherana.framework.annotations;
+package mg.razherana.framework.web.annotations;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

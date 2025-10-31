@@ -1,4 +1,4 @@
-package mg.razherana.framework.exceptions;
+package mg.razherana.framework.web.exceptions.http;
 
 public class NotFoundException extends HttpException {
   public NotFoundException(String message) {
