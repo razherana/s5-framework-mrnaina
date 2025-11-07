@@ -8,4 +8,8 @@ public class WebExecutionException extends WebException {
   public WebExecutionException(String string, Throwable thr) {
     super(string, thr);
   }
+
+  public WebExecutionException(Exception e) {
+    super(e.getMessage(), e);
+  }
 }

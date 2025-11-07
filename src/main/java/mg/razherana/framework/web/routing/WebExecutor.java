@@ -12,16 +12,22 @@ import mg.razherana.framework.web.annotations.parameters.CreateSession;
 import mg.razherana.framework.web.annotations.parameters.ParamVar;
 import mg.razherana.framework.web.annotations.parameters.PathVar;
 import mg.razherana.framework.web.annotations.parameters.PathVars;
+import mg.razherana.framework.web.containers.ResponseContainer;
 import mg.razherana.framework.web.containers.WebRouteContainer;
 import mg.razherana.framework.web.exceptions.MalformedWebAnnotationException;
+import mg.razherana.framework.web.exceptions.WebExecutionException;
 import mg.razherana.framework.web.exceptions.http.BadRequestException;
+import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.utils.ConversionUtils;
+import mg.razherana.framework.web.utils.ModelView;
 
 public class WebExecutor {
   private WebRouteContainer webRouteContainer;
+  private Map<String, ResponseHandler> responseHandlerMap;
 
-  public WebExecutor(WebRouteContainer webRouteContainer) {
+  public WebExecutor(WebRouteContainer webRouteContainer, Map<String, ResponseHandler> responseHandlerMap) {
     this.webRouteContainer = webRouteContainer;
+    this.responseHandlerMap = responseHandlerMap;
   }
 
   public void execute(HttpServletRequest request,
@@ -42,7 +48,29 @@ public class WebExecutor {
     Object[] methodArgs = resolveMethodArgs(method, pathParameters,
         request, response);
 
-    method.invoke(controllerInstance, methodArgs);
+    ResponseContainer rc = null;
+
+    try {
+      Object responseObject = method.invoke(controllerInstance, methodArgs);
+
+      if (responseObject instanceof String) {
+        ModelView mv = new ModelView(request, response);
+        rc = mv.write((String) responseObject);
+      } else if (responseObject instanceof ResponseContainer) {
+        rc = (ResponseContainer) responseObject;
+      }
+
+      if (rc == null)
+        return;
+
+    } catch (Exception e) {
+      rc = new ResponseContainer(e, "error");
+    }
+
+    String type = rc.getReturnType();
+    ResponseHandler responseHandler = responseHandlerMap.get(type);
+
+    responseHandler.handleResponse(rc, request, response);
   }
 
   private Object[] resolveMethodArgs(Method method,
@@ -135,6 +163,12 @@ public class WebExecutor {
         continue;
       }
 
+      // Check if ModelView
+      if (argType.equals(ModelView.class)) {
+        argInstances[i] = new ModelView(request, response);
+        continue;
+      }
+
       // Throw exception for unsupported parameter types
       throw new MalformedWebAnnotationException(
           "Unsupported parameter type: " + argType.getName()
@@ -156,5 +190,18 @@ public class WebExecutor {
 
   public Object getControllerInstance() {
     return webRouteContainer.getControllerInstance();
+  }
+
+  public static void sendException(HttpServletRequest request, HttpServletResponse response, Exception e, Map<String, ResponseHandler> respMap) {
+    ResponseContainer rc = new ResponseContainer(e, "error");
+
+    String type = rc.getReturnType();
+    ResponseHandler responseHandler = respMap.get(type);
+
+    try {
+      responseHandler.handleResponse(rc, request, response);
+    } catch (Exception ex) {
+      throw new WebExecutionException("Error when handling the error exception : ", ex);
+    }
   }
 }
