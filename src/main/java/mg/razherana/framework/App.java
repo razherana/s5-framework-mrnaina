@@ -101,13 +101,18 @@ public class App {
 
         String[] valueSplitted = value.split(":");
 
+        if (valueSplitted.length != 2)
+          throw new WebExecutionException("Invalid response handler format: " + value);
+
         String type = valueSplitted[0].trim();
         String className = valueSplitted[1].trim();
 
-        @SuppressWarnings("unchecked")
-        Class<ResponseHandler> responseHandlerClass = (Class<ResponseHandler>) Class.forName(className);
+        Class<?> clazz = Class.forName(className);
 
-        ResponseHandler responseObject = responseHandlerClass.getConstructor().newInstance();
+        if (!ResponseHandler.class.isAssignableFrom(clazz))
+          throw new WebExecutionException("Class does not implement ResponseHandler: " + className);
+
+        ResponseHandler responseObject = (ResponseHandler) clazz.getConstructor().newInstance();
 
         responseHandlerMap.put(type, responseObject);
       }

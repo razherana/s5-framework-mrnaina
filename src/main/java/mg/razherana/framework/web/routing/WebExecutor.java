@@ -70,6 +70,9 @@ public class WebExecutor {
     String type = rc.getReturnType();
     ResponseHandler responseHandler = responseHandlerMap.get(type);
 
+    if (responseHandler == null)
+      throw new WebExecutionException("No handler found for response type: " + type);
+
     responseHandler.handleResponse(rc, request, response);
   }
 
@@ -192,16 +195,22 @@ public class WebExecutor {
     return webRouteContainer.getControllerInstance();
   }
 
-  public static void sendException(HttpServletRequest request, HttpServletResponse response, Exception e, Map<String, ResponseHandler> respMap) {
+  public static void sendException(HttpServletRequest request,
+      HttpServletResponse response,
+      Exception e,
+      Map<String, ResponseHandler> respMap) {
     ResponseContainer rc = new ResponseContainer(e, "error");
 
     String type = rc.getReturnType();
     ResponseHandler responseHandler = respMap.get(type);
 
+    if (responseHandler == null)
+      throw new WebExecutionException("No handler found for response type: " + type);
+
     try {
       responseHandler.handleResponse(rc, request, response);
     } catch (Exception ex) {
-      throw new WebExecutionException("Error when handling the error exception : ", ex);
+      throw new WebExecutionException("Error when handling the error exception", ex);
     }
   }
 }

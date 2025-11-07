@@ -7,29 +7,30 @@ import mg.razherana.framework.web.containers.ResponseContainer;
 public class ModelView {
   private final HttpServletRequest request;
   private final HttpServletResponse response;
-  private final ResponseContainer responseContainer = new ResponseContainer(null, null);
+  private ResponseContainer responseContainer;
 
   public ModelView(HttpServletRequest request, HttpServletResponse response) {
     this.request = request;
     this.response = response;
+    this.responseContainer = new ResponseContainer(null, null);
   }
 
   /**
-   * Get the header from request
+   * Retrieves the value of the specified header from the request.
    * 
-   * @param name
-   * @return
+   * @param name the header name to retrieve from the request
+   * @return the header value, or {@code null} if not found
    */
   public String header(String name) {
     return request.getHeader(name);
   }
 
   /**
-   * Put header in response
+   * Put header in response.
    * 
-   * @param name
-   * @param value
-   * @return
+   * @param name  the name of the header to set
+   * @param value the value of the header to set
+   * @return this ModelView instance for method chaining
    */
   public ModelView header(String name, String value) {
     response.setHeader(name, value);

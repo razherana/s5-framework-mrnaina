@@ -6,8 +6,8 @@ import mg.razherana.framework.web.containers.ResponseContainer;
 import mg.razherana.framework.web.handlers.responses.exceptions.ResponseHandlerException;
 
 public class JspViewResponseHandler implements ResponseHandler {
-  public class ViewResponseHandlerException extends ResponseHandlerException {
-    private ViewResponseHandlerException(String message) {
+  public static class ViewResponseHandlerException extends ResponseHandlerException {
+    ViewResponseHandlerException(String message) {
       super(message);
     }
   }

@@ -6,11 +6,13 @@ import mg.razherana.framework.web.containers.ResponseContainer;
 
 public interface ResponseHandler {
   /**
-   * Handles the response based on the result given
+   * Handles the response based on the result given.
    * 
-   * @param mv
-   * @param request
-   * @param response
+   * @param rc       the response container holding the result data
+   * @param request  the HTTP servlet request
+   * @param response the HTTP servlet response
+   * @throws Exception if an error occurs while handling the response
    */
-  public void handleResponse(ResponseContainer rc, HttpServletRequest request, HttpServletResponse response) throws Exception;
+  public void handleResponse(ResponseContainer rc, HttpServletRequest request, HttpServletResponse response)
+      throws Exception;
 }

@@ -1,6 +1,7 @@
 package mg.razherana.framework.web.handlers.responses;
 
 import java.util.Arrays;
+import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,7 +24,7 @@ public class ErrorResponseHandler implements ResponseHandler {
 
     String stackTrace = Arrays.stream(e.getStackTrace())
         .map(StackTraceElement::toString)
-        .reduce("", (a, b) -> a + "\n" + b);
+        .collect(Collectors.joining("\n"));
 
     response.sendError(500, "Exception found : " +
         (e.getMessage() != null
