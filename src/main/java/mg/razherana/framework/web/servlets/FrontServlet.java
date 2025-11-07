@@ -12,7 +12,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import mg.razherana.framework.App;
 import mg.razherana.framework.App.InitKey;
 import mg.razherana.framework.web.containers.WebRouteContainer;
-import mg.razherana.framework.web.exceptions.http.HttpException;
 import mg.razherana.framework.web.exceptions.http.NotFoundException;
 import mg.razherana.framework.web.routing.WebExecutor;
 
@@ -38,6 +37,9 @@ public class FrontServlet extends HttpServlet {
 
     // Find all controllers at startup
     app.scanControllers(basePackage);
+
+    // Get all the custom response handlers + default ones
+    app.initResponseHandlers(getServletContext());
 
     // Initialize WebFinder and WebMapper
     app.initWeb();
@@ -80,15 +82,6 @@ public class FrontServlet extends HttpServlet {
   }
 
   @Override
-  protected void doOptions(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-    if (!resourceExists(req)) {
-      handleRequest(req, resp);
-      return;
-    }
-    super.doOptions(req, resp);
-  }
-
-  @Override
   protected void doHead(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
     if (!resourceExists(req)) {
       handleRequest(req, resp);
@@ -106,15 +99,6 @@ public class FrontServlet extends HttpServlet {
     super.doDelete(req, resp);
   }
 
-  @Override
-  protected void doTrace(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-    if (!resourceExists(req)) {
-      handleRequest(req, resp);
-      return;
-    }
-    super.doTrace(req, resp);
-  }
-
   private void handleRequest(HttpServletRequest request, HttpServletResponse response)
       throws ServletException, IOException {
     try {
@@ -126,12 +110,10 @@ public class FrontServlet extends HttpServlet {
       }
 
       // Execute the route
-      WebExecutor webExecutor = new WebExecutor(webRouteContainer);
+      WebExecutor webExecutor = new WebExecutor(webRouteContainer, app.getResponseHandlerMap());
       webExecutor.execute(request, response);
-    } catch (HttpException httpEx) {
-      response.sendError(httpEx.getStatusCode(), httpEx.getMessage());
     } catch (Exception e) {
-      e.printStackTrace();
+      WebExecutor.sendException(request, response, e, app.getResponseHandlerMap());
     }
   }
 }

@@ -1,10 +1,17 @@
 package mg.razherana.framework;
 
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.servlet.ServletContext;
 import mg.razherana.framework.scanners.ScanControllers;
+import mg.razherana.framework.web.exceptions.WebExecutionException;
+import mg.razherana.framework.web.handlers.responses.ErrorResponseHandler;
+import mg.razherana.framework.web.handlers.responses.JspViewResponseHandler;
+import mg.razherana.framework.web.handlers.responses.ResponseHandler;
+import mg.razherana.framework.web.handlers.responses.WriteResponseHandler;
 import mg.razherana.framework.web.routing.WebFinder;
 import mg.razherana.framework.web.routing.WebMapper;
 
@@ -14,7 +21,7 @@ import mg.razherana.framework.web.routing.WebMapper;
 public class App {
 
   public static enum InitKey {
-    BASE_PACKAGE("basePackage");
+    BASE_PACKAGE("basePackage"), RESPONSE_HANDLERS("responseHandlers");
 
     private final String key;
 
@@ -31,6 +38,7 @@ public class App {
   private Map<Class<?>, List<Method>> urlControllerMap;
   private WebFinder webFinder;
   private WebMapper webMapper;
+  private final Map<String, ResponseHandler> responseHandlerMap = new HashMap<>();
 
   public App(List<Class<?>> controllerClasses, Map<Class<?>, List<Method>> urlControllerMap) {
     this.controllerClasses = controllerClasses;
@@ -65,5 +73,51 @@ public class App {
   public void initWeb() {
     webFinder = new WebFinder(urlControllerMap);
     webMapper = new WebMapper(webFinder);
+  }
+
+  public Map<String, ResponseHandler> getResponseHandlerMap() {
+    return responseHandlerMap;
+  }
+
+  public void initResponseHandlers(ServletContext servletContext) {
+    // Init the default ones
+    responseHandlerMap.put("view", new JspViewResponseHandler());
+    responseHandlerMap.put("write", new WriteResponseHandler());
+    responseHandlerMap.put("error", new ErrorResponseHandler());
+
+    // Set the custom ones
+    try {
+      String classNamesStr = servletContext.getInitParameter(InitKey.RESPONSE_HANDLERS.getKey());
+
+      if (classNamesStr == null)
+        return;
+
+      classNamesStr = classNamesStr.trim();
+
+      String[] classNames = classNamesStr.split(",");
+
+      for (String value : classNames) {
+        value = value.trim();
+
+        String[] valueSplitted = value.split(":");
+
+        if (valueSplitted.length != 2)
+          throw new WebExecutionException("Invalid response handler format: " + value);
+
+        String type = valueSplitted[0].trim();
+        String className = valueSplitted[1].trim();
+
+        Class<?> clazz = Class.forName(className);
+
+        if (!ResponseHandler.class.isAssignableFrom(clazz))
+          throw new WebExecutionException("Class does not implement ResponseHandler: " + className);
+
+        ResponseHandler responseObject = (ResponseHandler) clazz.getConstructor().newInstance();
+
+        responseHandlerMap.put(type, responseObject);
+      }
+    } catch (Exception e) {
+      throw new WebExecutionException(e);
+    }
   }
 }
