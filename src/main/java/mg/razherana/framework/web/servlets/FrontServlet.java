@@ -43,6 +43,17 @@ public class FrontServlet extends HttpServlet {
 
     // Initialize WebFinder and WebMapper
     app.initWeb();
+
+    // Preprocess JSP files
+    app.initJspUtils(getServletContext());
+  }
+
+  @Override
+  public void destroy() {
+    super.destroy();
+
+    // Destroy the application
+    app.destroy(getServletContext());
   }
 
   private boolean resourceExists(HttpServletRequest request) {

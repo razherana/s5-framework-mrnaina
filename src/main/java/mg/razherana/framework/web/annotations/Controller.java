@@ -9,4 +9,11 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Controller {
   String value() default "";
+
+  /**
+   * Alias of the controller.
+   * If not provided, the controller class name lowercased will be used as alias.
+   * @return
+   */
+  String alias() default "";
 }

@@ -20,6 +20,8 @@ import mg.razherana.framework.web.exceptions.http.BadRequestException;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.utils.ConversionUtils;
 import mg.razherana.framework.web.utils.ModelView;
+import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
+import mg.razherana.framework.web.utils.jsp.JspUtil;
 
 public class WebExecutor {
   private WebRouteContainer webRouteContainer;
@@ -32,6 +34,13 @@ public class WebExecutor {
 
   public void execute(HttpServletRequest request,
       HttpServletResponse response) throws Exception {
+    // Instanciate JSPUtils instances
+    Map<String, Class<? extends JspUtil>> jspUtilMap = JspFunctionBridge.getJspUtilMap();
+
+    JspFunctionBridge jspFunctionBridge = instantiateJspUtils(jspUtilMap, request, response);
+
+    request.setAttribute("jspFunctionBridge", jspFunctionBridge);
+
     Method method = webRouteContainer.getMethod();
     Object controllerInstance = webRouteContainer
         .getControllerInstance();
@@ -74,6 +83,30 @@ public class WebExecutor {
       throw new WebExecutionException("No handler found for response type: " + type);
 
     responseHandler.handleResponse(rc, request, response);
+  }
+
+  private JspFunctionBridge instantiateJspUtils(
+      Map<String, Class<? extends JspUtil>> jspUtilMap,
+      HttpServletRequest request,
+      HttpServletResponse response) {
+    JspFunctionBridge jspFunctionBridge = new JspFunctionBridge();
+
+    for (String jspUtilViewName : jspUtilMap.keySet()) {
+      JspUtil jspUtil;
+      try {
+        jspUtil = jspUtilMap.get(jspUtilViewName).getDeclaredConstructor().newInstance();
+      } catch (Exception e) {
+        // Should not happen
+        throw new RuntimeException(e);
+      }
+
+      jspUtil.getData().put("request", request);
+      jspUtil.getData().put("response", response);
+
+      jspFunctionBridge.registerFunction(jspUtilViewName, (Object... args) -> jspUtil.run(args));
+    }
+
+    return jspFunctionBridge;
   }
 
   private Object[] resolveMethodArgs(Method method,
