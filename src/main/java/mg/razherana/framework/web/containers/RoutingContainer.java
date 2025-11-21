@@ -14,25 +14,28 @@ public class RoutingContainer {
     HEAD;
   }
 
-  private HttpMethod httpMethod;
+  private HttpMethod[] httpMethods;
   private String path;
   private ControllerContainer parentControllerContainer;
 
   private Url routingAnnotation;
   private Method methodReflection;
 
-  public RoutingContainer(HttpMethod httpMethod, String path, ControllerContainer parentControllerContainer,
+  public RoutingContainer(HttpMethod[] httpMethods, String path, ControllerContainer parentControllerContainer,
       Url routingAnnotation, Method methodReflection) {
-    this.httpMethod = httpMethod;
+    this.httpMethods = httpMethods;
     this.path = path;
     this.parentControllerContainer = parentControllerContainer;
     this.routingAnnotation = routingAnnotation;
     this.methodReflection = methodReflection;
   }
 
-  public RoutingContainer(String httpMethod, String path, ControllerContainer parentControllerContainer,
+  public RoutingContainer(String[] httpMethod, String path, ControllerContainer parentControllerContainer,
       Url routingAnnotation, Method methodReflection) {
-    this.httpMethod = HttpMethod.valueOf(httpMethod.toUpperCase());
+    this.httpMethods = new HttpMethod[httpMethod.length];
+    for (int i = 0; i < httpMethod.length; i++) {
+      this.httpMethods[i] = HttpMethod.valueOf(httpMethod[i]);
+    }
     this.path = path;
     this.parentControllerContainer = parentControllerContainer;
     this.routingAnnotation = routingAnnotation;
@@ -43,12 +46,12 @@ public class RoutingContainer {
     this.methodReflection = methodReflection;
   }
 
-  public HttpMethod getHttpMethod() {
-    return httpMethod;
+  public HttpMethod[] getHttpMethods() {
+    return httpMethods;
   }
 
-  public void setHttpMethod(HttpMethod httpMethod) {
-    this.httpMethod = httpMethod;
+  public void setHttpMethod(HttpMethod[] httpMethod) {
+    this.httpMethods = httpMethod;
   }
 
   public String getPath() {
@@ -81,7 +84,7 @@ public class RoutingContainer {
 
   @Override
   public String toString() {
-    return "RoutingContainer [httpMethod=" + httpMethod + ", path=" + path + ", routingAnnotation=" + routingAnnotation
+    return "RoutingContainer [httpMethod=" + httpMethods + ", path=" + path + ", routingAnnotation=" + routingAnnotation
         + ", methodReflection="
         + methodReflection + "]";
   }

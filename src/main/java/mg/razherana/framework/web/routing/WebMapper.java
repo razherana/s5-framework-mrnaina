@@ -1,6 +1,7 @@
 package mg.razherana.framework.web.routing;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.HashMap;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -66,14 +67,16 @@ public class WebMapper {
 
       // Check each routing in the controller
       for (RoutingContainer routing : controller.getRoutingContainers()) {
-        if (!routing.getHttpMethod().equals(httpMethod))
+        if (Arrays.stream(routing.getHttpMethods())
+            .noneMatch(method -> method.equals(httpMethod)))
           continue;
 
         String fullRoutingPath = normalizePath(controllerPath + "/" + normalizePath(routing.getPath()));
 
         System.out.println("[Fruits] : Checking " + fullRoutingPath + " method");
 
-        WebRouteContainer dataMatch = checkPathMatchAndExtractParameters(fullRoutingPath, path, routing.getMethodReflection(),
+        WebRouteContainer dataMatch = checkPathMatchAndExtractParameters(fullRoutingPath, path,
+            routing.getMethodReflection(),
             controller.getControllerInstance());
 
         System.out.println("[Fruits] : Data match is " + dataMatch);

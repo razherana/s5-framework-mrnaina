@@ -19,5 +19,5 @@ public @interface Url {
    */
   String alias() default "";
   
-  HttpMethod method() default HttpMethod.GET;
+  HttpMethod[] method() default HttpMethod.GET;
 }
