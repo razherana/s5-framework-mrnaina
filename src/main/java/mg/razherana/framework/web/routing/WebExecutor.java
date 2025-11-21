@@ -8,6 +8,7 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import mg.razherana.framework.App;
 import mg.razherana.framework.web.annotations.parameters.CreateSession;
 import mg.razherana.framework.web.annotations.parameters.ParamVar;
 import mg.razherana.framework.web.annotations.parameters.PathVar;
@@ -33,11 +34,11 @@ public class WebExecutor {
   }
 
   public void execute(HttpServletRequest request,
-      HttpServletResponse response) throws Exception {
+      HttpServletResponse response, App app) throws Exception {
     // Instanciate JSPUtils instances
     Map<String, Class<? extends JspUtil>> jspUtilMap = JspFunctionBridge.getJspUtilMap();
 
-    JspFunctionBridge jspFunctionBridge = instantiateJspUtils(jspUtilMap, request, response);
+    JspFunctionBridge jspFunctionBridge = instantiateJspUtils(jspUtilMap, request, response, app);
 
     request.setAttribute("jspFunctionBridge", jspFunctionBridge);
 
@@ -88,7 +89,7 @@ public class WebExecutor {
   private JspFunctionBridge instantiateJspUtils(
       Map<String, Class<? extends JspUtil>> jspUtilMap,
       HttpServletRequest request,
-      HttpServletResponse response) {
+      HttpServletResponse response, App app) {
     JspFunctionBridge jspFunctionBridge = new JspFunctionBridge();
 
     for (String jspUtilViewName : jspUtilMap.keySet()) {
@@ -102,6 +103,7 @@ public class WebExecutor {
 
       jspUtil.getData().put("request", request);
       jspUtil.getData().put("response", response);
+      jspUtil.getData().put("app", app);
 
       jspFunctionBridge.registerFunction(jspUtilViewName, (Object... args) -> jspUtil.run(args));
     }

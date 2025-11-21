@@ -4,10 +4,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+
+import jakarta.servlet.http.HttpServletRequest;
+
 import java.util.Map;
 
 import mg.razherana.framework.web.routing.WebMapper;
-
+import mg.razherana.framework.App;
 import mg.razherana.framework.web.containers.ControllerContainer;
 import mg.razherana.framework.web.containers.RoutingContainer;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
@@ -27,13 +30,6 @@ public class RouteUtil extends JspUtil {
   }
 
   private static final String VIEW_NAME = "$route";
-  private ArrayList<ControllerContainer> controllerContainers = new ArrayList<>();
-  private String contextPath = "";
-
-  public RouteUtil(ArrayList<ControllerContainer> controllerContainers, String contextPath) {
-    this.controllerContainers = controllerContainers;
-    this.contextPath = contextPath;
-  }
 
   public RouteUtil() {
   }
@@ -45,9 +41,13 @@ public class RouteUtil extends JspUtil {
 
   @Override
   public Object run(Object... args) {
+    App app = (App) getData().get("app");
+    List<ControllerContainer> controllerContainers = app.getWebMapper().getWebFinder().getControllerContainers();
+    String contextPath = ((HttpServletRequest) getData().get("request")).getContextPath();
+
     DataDTO dataDTO = findVarsFromArgs(args);
 
-    ControllerContainer controllerContainer = findControllerByAlias(dataDTO.controllerAlias);
+    ControllerContainer controllerContainer = findControllerByAlias(dataDTO.controllerAlias, controllerContainers);
 
     if (controllerContainer == null) {
       throw new RouteNotFoundException(
@@ -109,13 +109,15 @@ public class RouteUtil extends JspUtil {
     return finalPath.toString();
   }
 
-  ControllerContainer findControllerByAlias(String alias) {
+  ControllerContainer findControllerByAlias(String alias, List<ControllerContainer> controllerContainers) {
     for (ControllerContainer controllerContainer : controllerContainers) {
       String controllerAlias = controllerContainer.getControllerAnnotation().alias();
 
       if (controllerAlias.trim().isEmpty())
         controllerAlias = controllerContainer.getControllerClass().getSimpleName().toLowerCase();
 
+      System.out.println("[Fruits] : Checking controller " + controllerContainer.getClass().getName() + ". Alias "
+          + alias + " equals " + controllerAlias);
       if (controllerAlias.equals(alias)) {
         return controllerContainer;
       }

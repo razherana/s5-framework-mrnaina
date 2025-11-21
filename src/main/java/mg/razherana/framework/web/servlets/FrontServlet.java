@@ -122,7 +122,7 @@ public class FrontServlet extends HttpServlet {
 
       // Execute the route
       WebExecutor webExecutor = new WebExecutor(webRouteContainer, app.getResponseHandlerMap());
-      webExecutor.execute(request, response);
+      webExecutor.execute(request, response, app);
     } catch (Exception e) {
       WebExecutor.sendException(request, response, e, app.getResponseHandlerMap());
     }

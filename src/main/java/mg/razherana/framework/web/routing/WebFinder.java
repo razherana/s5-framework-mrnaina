@@ -15,7 +15,6 @@ public class WebFinder {
 
   public WebFinder(Map<Class<?>, List<Method>> controllerMethods) {
     initFromControllerMethods(controllerMethods);
-
   }
 
   public List<ControllerContainer> getControllerContainers() {
