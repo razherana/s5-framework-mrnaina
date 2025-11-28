@@ -67,7 +67,7 @@ public class WebMapper {
 
       // Check each routing in the controller
       for (RoutingContainer routing : controller.getRoutingContainers()) {
-        if (Arrays.stream(routing.getHttpMethods())
+        if (!httpMethod.equals(HttpMethod.ALL) && Arrays.stream(routing.getHttpMethods())
             .noneMatch(method -> method.equals(httpMethod)))
           continue;
 
