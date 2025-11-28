@@ -227,30 +227,30 @@ public class WebExecutor {
 
         Map<String, Object> paramBody = new HashMap<>();
 
-        var normalParam = request.getParameterNames();
+        var normalParamNames = request.getParameterNames();
 
-        normalParam.asIterator().forEachRemaining((e) -> {
-          var result1 = request.getParameter(e);
-          var result2 = request.getParameterValues(e);
+        normalParamNames.asIterator().forEachRemaining((e) -> {
+          var parameterValue = request.getParameter(e);
+          var parameterValues = request.getParameterValues(e);
 
           System.out.println("[Fruits] : Name of parameter is " + e);
-          System.out.println("[Fruits] : Result1 is " + result1);
-          System.out.println("[Fruits] : Result2 is " + (result2 == null ? "Tsisy" : Arrays.deepToString(result2)));
+          System.out.println("[Fruits] : parameterValue is " + parameterValue);
+          System.out.println("[Fruits] : parameterValues is " + (parameterValues == null ? "Tsisy" : Arrays.deepToString(parameterValues)));
 
           Object resultObject = null;
 
-          if (result1 == null && result2 == null)
+          if (parameterValue == null && parameterValues == null)
             return;
 
-          if (result2 != null)
-            resultObject = result2;
-          else if (result1 != null && !result1.isBlank())
-            resultObject = result1;
+          if (parameterValues != null)
+            resultObject = parameterValues;
+          else if (parameterValue != null && !parameterValue.isBlank())
+            resultObject = parameterValue;
           else
             return;
 
-          if (result2.length == 1 && !e.endsWith("[]"))
-            resultObject = result1;
+          if (parameterValues.length == 1 && !e.endsWith("[]"))
+            resultObject = parameterValue;
 
           paramBody.put(e, resultObject);
         });
