@@ -11,7 +11,8 @@ public class RoutingContainer {
     PUT,
     DELETE,
     OPTIONS,
-    HEAD;
+    HEAD,
+    ALL;
   }
 
   private HttpMethod[] httpMethods;

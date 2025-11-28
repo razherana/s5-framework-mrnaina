@@ -2,6 +2,8 @@ package mg.razherana.framework.web.routing;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 
 import jakarta.servlet.ServletContext;
@@ -10,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import mg.razherana.framework.App;
 import mg.razherana.framework.web.annotations.parameters.CreateSession;
+import mg.razherana.framework.web.annotations.parameters.ParamBody;
 import mg.razherana.framework.web.annotations.parameters.ParamVar;
 import mg.razherana.framework.web.annotations.parameters.PathVar;
 import mg.razherana.framework.web.annotations.parameters.PathVars;
@@ -104,6 +107,7 @@ public class WebExecutor {
       jspUtil.getData().put("request", request);
       jspUtil.getData().put("response", response);
       jspUtil.getData().put("app", app);
+      jspUtil.getData().put("webExecutor", this);
 
       jspFunctionBridge.registerFunction(jspUtilViewName, (Object... args) -> jspUtil.run(args));
     }
@@ -204,6 +208,54 @@ public class WebExecutor {
       // Check if ModelView
       if (argType.equals(ModelView.class)) {
         argInstances[i] = new ModelView(request, response);
+        continue;
+      }
+
+      // Check if ParamBody
+      if (arg.isAnnotationPresent(ParamBody.class)) {
+        System.out.println("[Fruits] : Type of @ParamBody is " + arg.getParameterizedType().getTypeName() + " - "
+            + arg.getParameterizedType());
+
+        // Check if param type is Map
+        if (argType != Map.class
+            || !arg.getParameterizedType().getTypeName().equals(
+                "java.util.Map<java.lang.String, java.lang.Object>")) {
+          throw new MalformedWebAnnotationException("Unsupported parameter type: " + argType.getName()
+              + " in method: " + method.getName()
+              + ", the type must be of java.util.Map<java.lang.String, java.lang.Object> for a @ParamBody parameter.");
+        }
+
+        Map<String, Object> paramBody = new HashMap<>();
+
+        var normalParam = request.getParameterNames();
+
+        normalParam.asIterator().forEachRemaining((e) -> {
+          var result1 = request.getParameter(e);
+          var result2 = request.getParameterValues(e);
+
+          System.out.println("[Fruits] : Name of parameter is " + e);
+          System.out.println("[Fruits] : Result1 is " + result1);
+          System.out.println("[Fruits] : Result2 is " + (result2 == null ? "Tsisy" : Arrays.deepToString(result2)));
+
+          Object resultObject = null;
+
+          if (result1 == null && result2 == null)
+            return;
+
+          if (result2 != null)
+            resultObject = result2;
+          else if (result1 != null && !result1.isBlank())
+            resultObject = result1;
+          else
+            return;
+
+          if (result2.length == 1 && !e.endsWith("[]"))
+            resultObject = result1;
+
+          paramBody.put(e, resultObject);
+        });
+
+        argInstances[i] = paramBody;
         continue;
       }
 
