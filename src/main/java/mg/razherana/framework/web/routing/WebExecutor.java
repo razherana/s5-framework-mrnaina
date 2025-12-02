@@ -26,6 +26,7 @@ import mg.razherana.framework.web.utils.ConversionUtils;
 import mg.razherana.framework.web.utils.ModelView;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
+import mg.razherana.framework.web.utils.objectconversion.ConversionObjectUtils;
 
 public class WebExecutor {
   private WebRouteContainer webRouteContainer;
@@ -265,7 +266,12 @@ public class WebExecutor {
         }
 
         // Else, try to convert to the appropriate object
-        
+        else {
+          System.out.println("[Fruits] : Converting param body to object of type "
+              + arg.getType().getName());
+          returnObject = ConversionObjectUtils
+              .convertMapToObject(paramBody, arg.getType(), getControllerInstance());
+        }
 
         argInstances[i] = returnObject;
         continue;
