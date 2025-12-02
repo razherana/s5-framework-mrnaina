@@ -1,17 +1,12 @@
 package mg.razherana.framework.web.utils.objectconversion;
 
+import java.lang.reflect.Constructor;
 import java.util.Map;
 
 import mg.razherana.framework.web.utils.ConversionUtils;
 
 public class ConversionObjectUtils {
   private ConversionObjectUtils() {
-  }
-
-  public static boolean isPrimitiveOrWrapper(Class<?> type) {
-    return type.isPrimitive() || type == Boolean.class || type == Byte.class || type == Character.class
-        || type == Short.class || type == Integer.class || type == Long.class || type == Float.class
-        || type == Double.class;
   }
 
   public static <T> T convertMapToObject(Map<String, Object> parametersMap, Class<T> targetType, Object outerInstance) {
@@ -32,6 +27,13 @@ public class ConversionObjectUtils {
 
         Object convertedValue = ConversionUtils.convertStringOrArrToType(value, field.getType());
 
+        if (field.getType().isPrimitive() && convertedValue == null) {
+          // Skip setting primitive fields to null to avoid exceptions
+          System.out.println(
+              "[Fruits] : Skipping setting primitive field to null: " + key + " on type: " + targetType.getName());
+          return;
+        }
+
         field.set(instance, convertedValue);
       } catch (NoSuchFieldException e) {
         System.out.println("[Fruits] : Field not found: " + key + " on type: " + targetType.getName());
@@ -46,9 +48,16 @@ public class ConversionObjectUtils {
 
   private static <T> T instanciate(Class<T> targetType, Object outerInstance) {
     try {
-      if (outerInstance != null)
-        return targetType.getDeclaredConstructor(outerInstance.getClass()).newInstance(outerInstance);
+      Constructor<T> constructor;
 
+      if (outerInstance != null) {
+        constructor = targetType.getDeclaredConstructor(outerInstance.getClass());
+        constructor.setAccessible(true);
+        return constructor.newInstance(outerInstance);
+      }
+
+      constructor = targetType.getDeclaredConstructor();
+      constructor.setAccessible(true);
       return targetType.getDeclaredConstructor().newInstance();
     } catch (NoSuchMethodException e) {
       throw new ConversionObjectException("No default constructor found for type: " + targetType.getName(), e);
