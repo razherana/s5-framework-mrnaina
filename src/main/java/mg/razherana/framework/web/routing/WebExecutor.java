@@ -176,7 +176,7 @@ public class WebExecutor {
 
         Object varValueObj = null;
 
-        if (arg.getType().isArray()) {
+        if (arg.getType().isArray() && !paramVar.forceString()) {
           varValueObj = varValues;
         } else {
           varValueObj = varValue;
