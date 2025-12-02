@@ -1,28 +1,70 @@
 package mg.razherana.framework.web.utils;
 
+import java.lang.reflect.Array;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ConversionUtils {
   private ConversionUtils() {
   }
 
+  public static Object convertStringOrArrToType(Object value, Class<?> targetType) {
+    if (value == null)
+      return null;
+
+    if (value instanceof String)
+      return convertStringToType((String) value, targetType);
+
+    if (value instanceof String[])
+      return convertStringToTypeArrays((String[]) value, targetType);
+
+    throw new IllegalArgumentException("Unsupported value type: " + value.getClass().getName());
+
+  }
+
   public static Object convertStringToType(String value, Class<?> targetType) {
-    if (value == null) {
+    if (value == null || value.isEmpty()) {
       return null;
     }
+
     if (targetType == String.class) {
       return value;
     } else if (targetType == int.class || targetType == Integer.class) {
-      return Integer.parseInt(value);
+      Object o;
+      try {
+        o = Integer.parseInt(value);
+      } catch (Exception e) {
+        o = null;
+      }
+      return o;
     } else if (targetType == long.class || targetType == Long.class) {
-      return Long.parseLong(value);
+      Object o;
+      try {
+        o = Long.parseLong(value);
+      } catch (Exception e) {
+        o = null;
+      }
+      return o;
     } else if (targetType == double.class || targetType == Double.class) {
-      return Double.parseDouble(value);
+      Object o;
+      try {
+        o = Double.parseDouble(value);
+      } catch (Exception e) {
+        o = null;
+      }
+      return o;
     } else if (targetType == boolean.class || targetType == Boolean.class) {
       return Boolean.parseBoolean(value);
     } else if (targetType == float.class || targetType == Float.class) {
-      return Float.parseFloat(value);
+      Object o;
+      try {
+        o = Float.parseFloat(value);
+      } catch (Exception e) {
+        o = null;
+      }
+      return o;
     } else if (targetType == LocalDate.class) {
       Object o;
 
@@ -51,65 +93,38 @@ public class ConversionUtils {
     throw new IllegalArgumentException("Unsupported target type: " + targetType.getName());
   }
 
-  private static Object convertStringToTypeArrays(String value, Class<?> targetType) {
-    String[] stringValues = value.split(",");
-    Class<?> componentType = targetType.getComponentType();
-
-    if (componentType == String.class) {
-      String[] array = stringValues;
-      return array;
-    } else if (componentType == int.class || componentType == Integer.class) {
-      Integer[] array = new Integer[stringValues.length];
-      for (int i = 0; i < stringValues.length; i++) {
-        array[i] = Integer.parseInt(stringValues[i].trim());
-      }
-      return array;
-    } else if (componentType == long.class || componentType == Long.class) {
-      Long[] array = new Long[stringValues.length];
-      for (int i = 0; i < stringValues.length; i++) {
-        array[i] = Long.parseLong(stringValues[i].trim());
-      }
-      return array;
-    } else if (componentType == double.class || componentType == Double.class) {
-      Double[] array = new Double[stringValues.length];
-      for (int i = 0; i < stringValues.length; i++) {
-        array[i] = Double.parseDouble(stringValues[i].trim());
-      }
-      return array;
-    } else if (componentType == boolean.class || componentType == Boolean.class) {
-      Boolean[] array = new Boolean[stringValues.length];
-      for (int i = 0; i < stringValues.length; i++) {
-        array[i] = Boolean.parseBoolean(stringValues[i].trim());
-      }
-      return array;
-    } else if (componentType == float.class || componentType == Float.class) {
-      Float[] array = new Float[stringValues.length];
-      for (int i = 0; i < stringValues.length; i++) {
-        array[i] = Float.parseFloat(stringValues[i].trim());
-      }
-      return array;
-    } else if (componentType == LocalDate.class) {
-      LocalDate[] array = new LocalDate[stringValues.length];
-      for (int i = 0; i < stringValues.length; i++) {
-        try {
-          array[i] = LocalDate.parse(stringValues[i].trim());
-        } catch (Exception e) {
-          array[i] = null;
-        }
-      }
-      return array;
-    } else if (componentType == LocalDateTime.class) {
-      LocalDateTime[] array = new LocalDateTime[stringValues.length];
-      for (int i = 0; i < stringValues.length; i++) {
-        try {
-          array[i] = LocalDateTime.parse(stringValues[i].trim());
-        } catch (Exception e) {
-          array[i] = null;
-        }
-      }
-      return array;
+  private static Object convertStringToTypeArrays(String[] values, Class<?> targetType) {
+    if (values == null || values.length == 0 || !targetType.isArray()) {
+      return null;
     }
 
-    throw new IllegalArgumentException("Unsupported array component type: " + componentType.getName());
+    Class<?> componentType = targetType.getComponentType();
+
+    List<Object> elementList = new ArrayList<>();
+
+    for (int i = 0; i < values.length; i++) {
+      Object element = convertStringToType(values[i], componentType);
+
+      if (element == null)
+        continue;
+
+      elementList.add(element);
+    }
+
+    Object array = Array.newInstance(componentType, elementList.size());
+
+    for (int i = 0; i < elementList.size(); i++) {
+      Object element = elementList.get(i);
+
+      Array.set(array, i, element);
+    }
+
+    return array;
+  }
+
+  private static Object convertStringToTypeArrays(String value, Class<?> targetType) {
+    String[] stringValues = value.split(",");
+
+    return convertStringToTypeArrays(stringValues, targetType);
   }
 }

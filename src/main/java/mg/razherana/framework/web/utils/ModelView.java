@@ -36,9 +36,10 @@ public class ModelView {
     response.setHeader(name, value);
     return this;
   }
-
-  public Object attribute(String name) {
-    return request.getAttribute(name);
+  
+  @SuppressWarnings("unchecked")
+  public <T> T attribute(String name) {
+    return (T) request.getAttribute(name);
   }
 
   public ModelView attribute(String name, Object value) {
