@@ -164,7 +164,6 @@ public class WebExecutor {
         throw new MalformedWebAnnotationException(
             "@PathVars can only be applied to parameters of type Map<String, String> in method: "
                 + method.getName());
-
       }
 
       // Check for @ParamVar
@@ -173,20 +172,29 @@ public class WebExecutor {
         String varName = paramVar.value();
 
         String varValue = request.getParameter(varName);
+        String[] varValues = request.getParameterValues(varName);
 
-        if (varValue == null) {
+        Object varValueObj = null;
+
+        if (arg.getType().isArray()) {
+          varValueObj = varValues;
+        } else {
+          varValueObj = varValue;
+        }
+
+        if (varValueObj == null) {
           if (paramVar.required()) {
             // The request object is being stored as additional data in the exception.
             throw new BadRequestException("Missing required parameter: " + varName, request);
           }
 
           // Use default value
-          varValue = paramVar.defaultValue();
+          varValueObj = paramVar.defaultValue();
         }
 
         // Convert to appropriate type
         Object convertedValue = ConversionUtils
-            .convertStringToType(varValue, argType);
+            .convertStringOrArrToType(varValueObj, argType);
 
         argInstances[i] = convertedValue;
         continue;
@@ -216,15 +224,7 @@ public class WebExecutor {
         System.out.println("[Fruits] : Type of @ParamBody is " + arg.getParameterizedType().getTypeName() + " - "
             + arg.getParameterizedType());
 
-        // Check if param type is Map
-        if (argType != Map.class
-            || !arg.getParameterizedType().getTypeName().equals(
-                "java.util.Map<java.lang.String, java.lang.Object>")) {
-          throw new MalformedWebAnnotationException("Unsupported parameter type: " + argType.getName()
-              + " in method: " + method.getName()
-              + ", the type must be of java.util.Map<java.lang.String, java.lang.Object> for a @ParamBody parameter.");
-        }
-
+        Object returnObject = null;
         Map<String, Object> paramBody = new HashMap<>();
 
         var normalParamNames = request.getParameterNames();
@@ -235,7 +235,8 @@ public class WebExecutor {
 
           System.out.println("[Fruits] : Name of parameter is " + e);
           System.out.println("[Fruits] : parameterValue is " + parameterValue);
-          System.out.println("[Fruits] : parameterValues is " + (parameterValues == null ? "Tsisy" : Arrays.deepToString(parameterValues)));
+          System.out.println("[Fruits] : parameterValues is "
+              + (parameterValues == null ? "Tsisy" : Arrays.deepToString(parameterValues)));
 
           Object resultObject = null;
 
@@ -255,7 +256,18 @@ public class WebExecutor {
           paramBody.put(e, resultObject);
         });
 
-        argInstances[i] = paramBody;
+        // Check param type if Map
+        if (argType == Map.class
+            && arg.getParameterizedType().getTypeName().equals(
+                "java.util.Map<java.lang.String, java.lang.Object>")) {
+          System.out.println("[Fruits] : Returning param body as Map<String, Object>");
+          returnObject = paramBody;
+        }
+
+        // Else, try to convert to the appropriate object
+        
+
+        argInstances[i] = returnObject;
         continue;
       }
 
