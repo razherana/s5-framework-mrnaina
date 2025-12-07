@@ -1,6 +1,7 @@
 package mg.razherana.framework.web.utils.json.types;
 
 import mg.razherana.framework.web.utils.json.JsonObjectBuilder;
+import mg.razherana.framework.web.utils.json.JsonParser;
 
 public abstract class JsonElement {
   public abstract String toString();
@@ -38,6 +39,20 @@ public abstract class JsonElement {
     if (value instanceof Object)
       return JsonObjectBuilder.buildFromClassAttributes(value);
 
+    // Should not reach here
     throw new IllegalArgumentException("Unsupported type: " + value.getClass().getName());
+  }
+
+  public static JsonElement from(String jsonString) {
+    return JsonParser.parse(jsonString);
+  }
+
+  // public static <T> JsonElement to(Class<T> clazz) {
+
+  // }
+
+  public static void main(String[] args) {
+    System.out.println(JsonElement.from(
+        "{\"name\":\"John\",\"age\":30,\"isStudent\":false,\"scores\":[85,90,92, {\"test\":\"teest\"}],\"address\":{\"city\":\"New York\",\"zip\":\"10001\"}}"));
   }
 }
