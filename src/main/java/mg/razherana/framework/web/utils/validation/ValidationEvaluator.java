@@ -37,6 +37,9 @@ public class ValidationEvaluator {
    */
   public ValidationEvaluator(ValidationParser parser) {
     this.parser = parser;
+
+    // Add operators to keywords
+    this.parser.getKeywords().addAll(OPERATOR_PRECEDENCE.keySet());
   }
 
   public ValidationResult evaluate() {
@@ -52,7 +55,6 @@ public class ValidationEvaluator {
 
     return new ValidationResult(false,
         "Validation rule failed: " + parser.getRule());
-
   }
 
   public static boolean asBoolean(Object value) {

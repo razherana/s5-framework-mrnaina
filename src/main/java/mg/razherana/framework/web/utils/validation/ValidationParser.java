@@ -1,6 +1,5 @@
 package mg.razherana.framework.web.utils.validation;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -9,9 +8,6 @@ import java.util.Set;
 import mg.razherana.framework.web.utils.parseandevaluate.UnifiedTokenizer;
 
 public class ValidationParser {
-  private static final String[] operators = { "<=", ">=", "<", ">", "==", "!=", "&&", "||", "!", "(", ")", "+", "-",
-      "*", "/", "%" };
-
   private String rule;
 
   private Map<String, Object> context;
@@ -23,8 +19,7 @@ public class ValidationParser {
     this.context = context;
 
     // Initialize keywords based on context keys
-    this.keywords = new HashSet<>(Arrays.asList(operators));
-    this.keywords.addAll(context.keySet());
+    this.keywords = new HashSet<>(context.keySet());
   }
 
   public List<String> parse() {
