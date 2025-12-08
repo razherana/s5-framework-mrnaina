@@ -11,6 +11,7 @@ public abstract class ValidationRuleFunction {
     IS_MULTIPLE_VALIDATION("__multiple_validation__"),
     ATTRIBUTES("__attributes__"),
     VALUE("__value__"),
+    MESSAGE("__message__"),
     NAME("__name__");
 
     private String key;

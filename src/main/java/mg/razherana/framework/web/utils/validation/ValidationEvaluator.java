@@ -53,8 +53,11 @@ public class ValidationEvaluator {
     if (asBoolean(evaluationResult))
       return ValidationResult.SUCCESS("Validation for rule passed: " + parser.getRule());
 
-    return new ValidationResult(false,
-        "Validation rule failed: " + parser.getRule());
+    String failed = (String) parser.getContext()
+        .getOrDefault(ValidationRuleFunction.ValidationKey.MESSAGE.key(),
+            "Validation rule failed for the rule : " + parser.getRule());
+
+    return new ValidationResult(false, failed);
   }
 
   public static boolean asBoolean(Object value) {
