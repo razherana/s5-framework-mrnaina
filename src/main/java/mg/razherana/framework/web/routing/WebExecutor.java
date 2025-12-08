@@ -160,7 +160,7 @@ public class WebExecutor {
 
     // Initialize JSON data if application/json
     JsonElement body = null;
-    if (request.getContentType().equals("application/json"))
+    if (request.getContentType() != null && request.getContentType().equals("application/json"))
       body = requestBodyToJson(request);
 
     for (int i = 0; i < args.length; i++) {
@@ -266,8 +266,8 @@ public class WebExecutor {
         System.out.println("[Fruits] : Type of @ParamBody is " + arg.getParameterizedType().getTypeName() + " - "
             + arg.getParameterizedType());
 
-        if (request.getContentType().equals("application/json") && body != null) {
-          if (argType == JsonElement.class) {
+        if (request.getContentType() != null && request.getContentType().equals("application/json") && body != null) {
+          if (argType == JsonElement.class || JsonElement.class.isAssignableFrom(argType)) {
             System.out.println("[Fruits] : Getting JsonElement from request body");
             argInstances[i] = body;
             continue;
