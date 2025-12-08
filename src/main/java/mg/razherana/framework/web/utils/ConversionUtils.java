@@ -5,12 +5,19 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
+import mg.razherana.framework.web.utils.json.types.JsonArray;
+import mg.razherana.framework.web.utils.json.types.JsonElement;
+import mg.razherana.framework.web.utils.json.types.JsonObject;
+import mg.razherana.framework.web.utils.json.types.JsonType;
+import mg.razherana.framework.web.utils.objectconversion.ConversionObjectUtils;
 
 public class ConversionUtils {
   private ConversionUtils() {
   }
 
-  public static Object convertStringOrArrToType(Object value, Class<?> targetType) {
+  public static Object convertStringOrArrToType(Object value, Class<?> targetType, Object outerInstance) {
     if (value == null)
       return null;
 
@@ -19,6 +26,13 @@ public class ConversionUtils {
 
     if (value instanceof String[])
       return convertStringToTypeArrays((String[]) value, targetType);
+
+    if (value instanceof Map && !targetType.isPrimitive()) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> paramMap = (Map<String, Object>) value;
+      return ConversionObjectUtils.convertMapToObject(paramMap,
+          targetType, outerInstance);
+    }
 
     throw new IllegalArgumentException("Unsupported value type: " + value.getClass().getName());
 
@@ -126,5 +140,53 @@ public class ConversionUtils {
     String[] stringValues = value.split(",");
 
     return convertStringToTypeArrays(stringValues, targetType);
+  }
+
+  private static List<Object> jsonElementToList(JsonElement body) {
+    if (body == null || body.getType() != JsonType.ARRAY) {
+      throw new IllegalArgumentException("Provided JsonElement is null or not a JsonArray");
+    }
+
+    List<Object> resultList = new ArrayList<>();
+    JsonArray jsonArray = (JsonArray) body;
+
+    // Foreach element, put into list
+    jsonArray.getElements().forEach(element -> {
+      if (element.getType() == JsonType.OBJECT) {
+        resultList.add(jsonElementToMap(element));
+      } else if (element.getType() == JsonType.ARRAY) {
+        resultList.add(jsonElementToList(element));
+      } else if (element.getType().isPrimitive()) {
+        resultList.add(element.getAsPrimitive());
+      } else {
+        throw new IllegalArgumentException("Unsupported JsonElement type in array: " + element.getType());
+      }
+    });
+
+    return resultList;
+  }
+
+  public static Map<String, Object> jsonElementToMap(JsonElement body) {
+    if (body == null || body.getType() != JsonType.OBJECT) {
+      throw new IllegalArgumentException("Provided JsonElement is null or not a JsonObject");
+    }
+
+    Map<String, Object> resultMap = new java.util.HashMap<>();
+
+    // Foreach entry, put into map
+    JsonObject jsonObject = (JsonObject) body;
+    jsonObject.getMembers().forEach((k, v) -> {
+      if (v.getType() == JsonType.OBJECT) {
+        resultMap.put(k, jsonElementToMap(v));
+      } else if (v.getType() == JsonType.ARRAY) {
+        resultMap.put(k, jsonElementToList(v));
+      } else if (v.getType().isPrimitive()) {
+        resultMap.put(k, v.getAsPrimitive());
+      } else {
+        throw new IllegalArgumentException("Unsupported JsonElement type in object: " + v.getType());
+      }
+    });
+
+    return resultMap;
   }
 }

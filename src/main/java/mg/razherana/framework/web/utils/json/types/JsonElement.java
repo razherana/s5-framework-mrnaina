@@ -55,4 +55,24 @@ public abstract class JsonElement {
     System.out.println(JsonElement.from(
         "{\"name\":\"John\",\"age\":30,\"isStudent\":false,\"scores\":[85,90,92, {\"test\":\"teest\"}],\"address\":{\"city\":\"New York\",\"zip\":\"10001\"}}"));
   }
+
+  public Object getAsPrimitive() {
+    if (!getType().isPrimitive()) {
+      throw new IllegalStateException("JsonElement is not a primitive type");
+    }
+    if (getType() == JsonType.STRING)
+      return ((JsonString) this).getValue();
+
+    if (getType() == JsonType.NUMBER)
+      return ((JsonNumber) this).getValue();
+
+    if (getType() == JsonType.BOOLEAN)
+      return ((JsonBoolean) this).getValue();
+
+    if (getType() == JsonType.NULL)
+      return null;
+
+    throw new IllegalStateException("Unknown primitive type: " + getType());
+
+  }
 }

@@ -6,5 +6,9 @@ public enum JsonType {
   STRING,
   NUMBER,
   BOOLEAN,
-  NULL
+  NULL;
+
+  public boolean isPrimitive() {
+    return this == STRING || this == NUMBER || this == BOOLEAN || this == NULL;
+  }
 }

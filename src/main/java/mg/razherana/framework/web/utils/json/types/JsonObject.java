@@ -6,6 +6,13 @@ import java.util.Map;
 public class JsonObject extends JsonElement {
   private final Map<String, JsonElement> members = new HashMap<>();
 
+  /**
+   * @return the members
+   */
+  public Map<String, JsonElement> getMembers() {
+    return members;
+  }
+
   public void add(String key, JsonElement value) {
     members.put(key, value);
   }

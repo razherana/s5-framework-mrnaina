@@ -1,10 +1,12 @@
 package mg.razherana.framework.web.routing;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,12 +26,33 @@ import mg.razherana.framework.web.exceptions.http.BadRequestException;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.utils.ConversionUtils;
 import mg.razherana.framework.web.utils.ModelView;
+import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
 import mg.razherana.framework.web.utils.objectconversion.ConversionObjectUtils;
 
 public class WebExecutor {
+  public static void sendException(HttpServletRequest request,
+      HttpServletResponse response,
+      Exception e,
+      Map<String, ResponseHandler> respMap) {
+    ResponseContainer rc = new ResponseContainer(e, "error");
+
+    String type = rc.getReturnType();
+    ResponseHandler responseHandler = respMap.get(type);
+
+    if (responseHandler == null)
+      throw new WebExecutionException("No handler found for response type: " + type);
+
+    try {
+      responseHandler.handleResponse(rc, request, response);
+    } catch (Exception ex) {
+      throw new WebExecutionException("Error when handling the error exception", ex);
+    }
+  }
+
   private WebRouteContainer webRouteContainer;
+
   private Map<String, ResponseHandler> responseHandlerMap;
 
   public WebExecutor(WebRouteContainer webRouteContainer, Map<String, ResponseHandler> responseHandlerMap) {
@@ -90,6 +113,19 @@ public class WebExecutor {
     responseHandler.handleResponse(rc, request, response);
   }
 
+  public WebRouteContainer getWebRouteContainer() {
+    return webRouteContainer;
+  }
+
+  public void setWebRouteContainer(
+      WebRouteContainer webRouteContainer) {
+    this.webRouteContainer = webRouteContainer;
+  }
+
+  public Object getControllerInstance() {
+    return webRouteContainer.getControllerInstance();
+  }
+
   private JspFunctionBridge instantiateJspUtils(
       Map<String, Class<? extends JspUtil>> jspUtilMap,
       HttpServletRequest request,
@@ -121,6 +157,11 @@ public class WebExecutor {
       HttpServletRequest request, HttpServletResponse response) {
     Parameter[] args = method.getParameters();
     Object[] argInstances = new Object[args.length];
+
+    // Initialize JSON data if application/json
+    JsonElement body = null;
+    if (request.getContentType().equals("application/json"))
+      body = requestBodyToJson(request);
 
     for (int i = 0; i < args.length; i++) {
       Parameter arg = args[i];
@@ -195,7 +236,7 @@ public class WebExecutor {
 
         // Convert to appropriate type
         Object convertedValue = ConversionUtils
-            .convertStringOrArrToType(varValueObj, argType);
+            .convertStringOrArrToType(varValueObj, argType, getControllerInstance());
 
         argInstances[i] = convertedValue;
         continue;
@@ -225,6 +266,22 @@ public class WebExecutor {
         System.out.println("[Fruits] : Type of @ParamBody is " + arg.getParameterizedType().getTypeName() + " - "
             + arg.getParameterizedType());
 
+        if (request.getContentType().equals("application/json") && body != null) {
+          if (argType == JsonElement.class) {
+            System.out.println("[Fruits] : Getting JsonElement from request body");
+            argInstances[i] = body;
+            continue;
+          }
+
+          System.out.println("[Fruits] : Converting JsonElement to object of type " + arg.getType().getName());
+
+          Object convertedObject = ConversionObjectUtils
+              .convertJsonToObject(body, arg.getType(), getControllerInstance());
+
+          argInstances[i] = convertedObject;
+          continue;
+        }
+
         Object returnObject = null;
         Map<String, Object> paramBody = new HashMap<>();
 
@@ -253,6 +310,9 @@ public class WebExecutor {
 
           if (parameterValues.length == 1 && !e.endsWith("[]"))
             resultObject = parameterValue;
+
+          if (e.endsWith("[]"))
+            e = e.substring(0, e.length() - 2);
 
           paramBody.put(e, resultObject);
         });
@@ -287,35 +347,16 @@ public class WebExecutor {
     return argInstances;
   }
 
-  public WebRouteContainer getWebRouteContainer() {
-    return webRouteContainer;
-  }
-
-  public void setWebRouteContainer(
-      WebRouteContainer webRouteContainer) {
-    this.webRouteContainer = webRouteContainer;
-  }
-
-  public Object getControllerInstance() {
-    return webRouteContainer.getControllerInstance();
-  }
-
-  public static void sendException(HttpServletRequest request,
-      HttpServletResponse response,
-      Exception e,
-      Map<String, ResponseHandler> respMap) {
-    ResponseContainer rc = new ResponseContainer(e, "error");
-
-    String type = rc.getReturnType();
-    ResponseHandler responseHandler = respMap.get(type);
-
-    if (responseHandler == null)
-      throw new WebExecutionException("No handler found for response type: " + type);
-
+  private JsonElement requestBodyToJson(HttpServletRequest request) {
+    String jsonString = null;
     try {
-      responseHandler.handleResponse(rc, request, response);
-    } catch (Exception ex) {
-      throw new WebExecutionException("Error when handling the error exception", ex);
+      jsonString = request.getReader()
+          .lines()
+          .collect(Collectors.joining());
+    } catch (IOException e) {
+      throw new WebExecutionException("Error reading request body", e);
     }
+
+    return JsonElement.from(jsonString);
   }
 }

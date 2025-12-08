@@ -35,4 +35,11 @@ public class JsonArray extends JsonElement {
     return JsonType.ARRAY;
   }
 
+  /**
+   * @return the elements
+   */
+  public List<JsonElement> getElements() {
+    return elements;
+  }
+
 }
