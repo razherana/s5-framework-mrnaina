@@ -1,12 +1,8 @@
 package mg.razherana.framework.web.routing;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,6 +22,7 @@ import mg.razherana.framework.web.exceptions.http.BadRequestException;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.utils.ConversionUtils;
 import mg.razherana.framework.web.utils.ModelView;
+import mg.razherana.framework.web.utils.RequestBody;
 import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
@@ -82,8 +79,11 @@ public class WebExecutor {
     System.out
         .println("[Fruits] : Path parameters: " + pathParameters);
 
+    RequestBody requestBody = RequestBody.from(request);
+    request.setAttribute("requestBody", requestBody);
+
     Object[] methodArgs = resolveMethodArgs(method, pathParameters,
-        request, response);
+      request, response, requestBody);
 
     ResponseContainer rc = null;
 
@@ -154,14 +154,10 @@ public class WebExecutor {
 
   private Object[] resolveMethodArgs(Method method,
       Map<String, String> pathParameters,
-      HttpServletRequest request, HttpServletResponse response) {
+      HttpServletRequest request, HttpServletResponse response,
+      RequestBody requestBody) {
     Parameter[] args = method.getParameters();
     Object[] argInstances = new Object[args.length];
-
-    // Initialize JSON data if application/json
-    JsonElement body = null;
-    if (request.getContentType() != null && request.getContentType().equals("application/json"))
-      body = requestBodyToJson(request);
 
     for (int i = 0; i < args.length; i++) {
       Parameter arg = args[i];
@@ -213,32 +209,28 @@ public class WebExecutor {
         ParamVar paramVar = arg.getAnnotation(ParamVar.class);
         String varName = paramVar.value();
 
-        String varValue = request.getParameter(varName);
-        String[] varValues = request.getParameterValues(varName);
+        Object rawValue = requestBody.get(varName);
 
-        Object varValueObj = null;
-
-        if (arg.getType().isArray() && !paramVar.forceString()) {
-          varValueObj = varValues;
-        } else {
-          varValueObj = varValue;
-        }
-
-        if (varValueObj == null) {
+        if (rawValue == null) {
           if (paramVar.required()) {
             // The request object is being stored as additional data in the exception.
             throw new BadRequestException("Missing required parameter: " + varName, request);
           }
 
           // Use default value
-          varValueObj = paramVar.defaultValue();
+          rawValue = paramVar.defaultValue();
+        } else if (paramVar.forceString() && rawValue instanceof String[] values) {
+          rawValue = values.length > 0 ? values[0] : "";
         }
 
-        // Convert to appropriate type
-        Object convertedValue = ConversionUtils
-            .convertStringOrArrToType(varValueObj, argType, getControllerInstance());
+        try {
+          Object convertedValue = ConversionUtils
+              .convertStringOrArrToType(rawValue, argType, getControllerInstance());
 
-        argInstances[i] = convertedValue;
+          argInstances[i] = convertedValue;
+        } catch (IllegalArgumentException e) {
+          throw new BadRequestException("Type mismatch for parameter: " + varName, request);
+        }
         continue;
       }
 
@@ -263,77 +255,35 @@ public class WebExecutor {
 
       // Check if ParamBody
       if (arg.isAnnotationPresent(ParamBody.class)) {
-        System.out.println("[Fruits] : Type of @ParamBody is " + arg.getParameterizedType().getTypeName() + " - "
-            + arg.getParameterizedType());
+        Map<String, Object> bodyMap = requestBody.asMap();
 
-        if (request.getContentType() != null && request.getContentType().equals("application/json") && body != null) {
-          if (argType == JsonElement.class || JsonElement.class.isAssignableFrom(argType)) {
-            System.out.println("[Fruits] : Getting JsonElement from request body");
-            argInstances[i] = body;
-            continue;
-          }
-
-          System.out.println("[Fruits] : Converting JsonElement to object of type " + arg.getType().getName());
-
-          Object convertedObject = ConversionObjectUtils
-              .convertJsonToObject(body, arg.getType(), getControllerInstance());
-
-          argInstances[i] = convertedObject;
+        if (argType == RequestBody.class || RequestBody.class.isAssignableFrom(argType)) {
+          argInstances[i] = requestBody;
           continue;
         }
 
-        Object returnObject = null;
-        Map<String, Object> paramBody = new HashMap<>();
-
-        var normalParamNames = request.getParameterNames();
-
-        normalParamNames.asIterator().forEachRemaining((e) -> {
-          var parameterValue = request.getParameter(e);
-          var parameterValues = request.getParameterValues(e);
-
-          System.out.println("[Fruits] : Name of parameter is " + e);
-          System.out.println("[Fruits] : parameterValue is " + parameterValue);
-          System.out.println("[Fruits] : parameterValues is "
-              + (parameterValues == null ? "Tsisy" : Arrays.deepToString(parameterValues)));
-
-          Object resultObject = null;
-
-          if (parameterValue == null && parameterValues == null)
-            return;
-
-          if (parameterValues != null)
-            resultObject = parameterValues;
-          else if (parameterValue != null && !parameterValue.isBlank())
-            resultObject = parameterValue;
-          else
-            return;
-
-          if (parameterValues.length == 1 && !e.endsWith("[]"))
-            resultObject = parameterValue;
-
-          if (e.endsWith("[]"))
-            e = e.substring(0, e.length() - 2);
-
-          paramBody.put(e, resultObject);
-        });
-
-        // Check param type if Map
         if (argType == Map.class
             && arg.getParameterizedType().getTypeName().equals(
                 "java.util.Map<java.lang.String, java.lang.Object>")) {
-          System.out.println("[Fruits] : Returning param body as Map<String, Object>");
-          returnObject = paramBody;
+          argInstances[i] = new java.util.HashMap<>(bodyMap);
+          continue;
         }
 
-        // Else, try to convert to the appropriate object
-        else {
-          System.out.println("[Fruits] : Converting param body to object of type "
-              + arg.getType().getName());
-          returnObject = ConversionObjectUtils
-              .convertMapToObject(paramBody, arg.getType(), getControllerInstance());
+        if (argType == JsonElement.class || JsonElement.class.isAssignableFrom(argType)) {
+          var jsonElement = requestBody.getJsonElement().orElse(null);
+
+          if (jsonElement == null) {
+            throw new BadRequestException("Request body is not JSON", request);
+          }
+
+          argInstances[i] = jsonElement;
+          continue;
         }
 
-        argInstances[i] = returnObject;
+        Object convertedObject = ConversionObjectUtils
+            .convertMapToObject(bodyMap, arg.getType(), getControllerInstance());
+
+        argInstances[i] = convertedObject;
         continue;
       }
 
@@ -345,18 +295,5 @@ public class WebExecutor {
     }
 
     return argInstances;
-  }
-
-  private JsonElement requestBodyToJson(HttpServletRequest request) {
-    String jsonString = null;
-    try {
-      jsonString = request.getReader()
-          .lines()
-          .collect(Collectors.joining());
-    } catch (IOException e) {
-      throw new WebExecutionException("Error reading request body", e);
-    }
-
-    return JsonElement.from(jsonString);
   }
 }
