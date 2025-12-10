@@ -23,6 +23,7 @@ import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.utils.ConversionUtils;
 import mg.razherana.framework.web.utils.ModelView;
 import mg.razherana.framework.web.utils.RequestBody;
+import mg.razherana.framework.web.utils.ResponseBody;
 import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
@@ -95,6 +96,10 @@ public class WebExecutor {
         rc = mv.write((String) responseObject);
       } else if (responseObject instanceof ResponseContainer) {
         rc = (ResponseContainer) responseObject;
+      } else if (responseObject instanceof JsonElement jsonElement) {
+        rc = new ResponseContainer(jsonElement, "json");
+      } else if (responseObject instanceof ResponseBody responseBody) {
+        rc = new ResponseContainer(responseBody, "json");
       }
 
       if (rc == null)

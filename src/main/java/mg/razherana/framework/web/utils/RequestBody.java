@@ -20,14 +20,14 @@ import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.json.types.JsonObject;
 import mg.razherana.framework.web.utils.json.types.JsonType;
 
-public final class RequestBody {
+public class RequestBody {
   private static final String REQUEST_BODY_ATTRIBUTE = RequestBody.class.getName() + ".INSTANCE";
   private static final String ROOT_VALUE_KEY = "value";
 
-  private final Map<String, Object> data;
-  private final JsonElement jsonElement;
+  protected final Map<String, Object> data;
+  protected JsonElement jsonElement;
 
-  private RequestBody(Map<String, Object> data, JsonElement jsonElement) {
+  protected RequestBody(Map<String, Object> data, JsonElement jsonElement) {
     this.data = data;
     this.jsonElement = jsonElement;
   }

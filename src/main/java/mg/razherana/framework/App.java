@@ -12,6 +12,7 @@ import mg.razherana.framework.scanners.ScanControllers;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
 import mg.razherana.framework.web.handlers.responses.ErrorResponseHandler;
 import mg.razherana.framework.web.handlers.responses.JspViewResponseHandler;
+import mg.razherana.framework.web.handlers.responses.JsonResponseHandler;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.handlers.responses.WriteResponseHandler;
 import mg.razherana.framework.web.routing.WebFinder;
@@ -92,6 +93,7 @@ public class App {
     // Init the default ones
     responseHandlerMap.put("view", new JspViewResponseHandler());
     responseHandlerMap.put("write", new WriteResponseHandler());
+    responseHandlerMap.put("json", new JsonResponseHandler());
     responseHandlerMap.put("error", new ErrorResponseHandler());
 
     // Set the custom ones
