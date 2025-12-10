@@ -6,8 +6,8 @@ public class JsonArray extends JsonElement {
 
   private final List<JsonElement> elements = new java.util.ArrayList<>();
 
-  public JsonArray(List<Object> values) {
-    for (Object value : values) {
+  public JsonArray(List<?> value2) {
+    for (Object value : value2) {
       elements.add(JsonElement.of(value));
     }
   }

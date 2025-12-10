@@ -17,9 +17,12 @@ public class JsonObject extends JsonElement {
     members.put(key, value);
   }
 
-  public JsonObject(Map<String, Object> map) {
-    for (Map.Entry<String, Object> entry : map.entrySet()) {
-      members.put(entry.getKey(), JsonElement.of(entry.getValue()));
+  public JsonObject(Map<?,?> value) {
+    if (value == null)
+      return;
+    
+    for (Map.Entry<?, ?> entry : value.entrySet()) {
+      members.put((String) entry.getKey(), JsonElement.of(entry.getValue()));
     }
   }
 
