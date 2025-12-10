@@ -44,4 +44,8 @@ public class JsonObject extends JsonElement {
   public JsonType getType() {
     return JsonType.OBJECT;
   }
+
+  public JsonElement get(String varName) {
+    return members.get(varName);
+  }
 }
