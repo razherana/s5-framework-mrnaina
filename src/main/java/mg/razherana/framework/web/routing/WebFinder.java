@@ -39,7 +39,10 @@ public final class WebFinder {
       throw new WebMappingException(
           "The controller " + controllerClass + " has not empty args constructor. Please make one.", e);
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new WebMappingException(
+          "Failed to instantiate controller " + controllerClass
+              + ". Ensure it has an accessible no-args constructor and that its initialization does not fail.",
+          e);
     }
     return controllerInstance;
   }
