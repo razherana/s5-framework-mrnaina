@@ -117,7 +117,9 @@ public class WebExecutor {
     try {
       Object responseObject = method.invoke(controllerInstance, methodArgs);
 
-      if (responseObject instanceof String) {
+      if (method.isAnnotationPresent(JsonUrl.class)) {
+        rc = new ResponseContainer(responseObject, "json");
+      } else if (responseObject instanceof String) {
         ModelView mv = new ModelView(request, response);
         rc = mv.write((String) responseObject);
       } else if (responseObject instanceof ResponseContainer) {
@@ -126,8 +128,6 @@ public class WebExecutor {
         rc = new ResponseContainer(jsonElement, "json");
       } else if (responseObject instanceof ResponseBody responseBody) {
         rc = new ResponseContainer(responseBody, "json");
-      } else if (method.isAnnotationPresent(JsonUrl.class)) {
-        rc = new ResponseContainer(responseObject, "json");
       }
 
       if (rc == null)
