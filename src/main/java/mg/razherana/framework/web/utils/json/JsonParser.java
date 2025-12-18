@@ -5,10 +5,11 @@ import mg.razherana.framework.web.utils.json.types.JsonElement;
 public class JsonParser {
 
   public static JsonElement parse(String jsonString) {
-    jsonString = jsonString.trim();
-    if (jsonString == null || jsonString.isEmpty()) {
+    if (jsonString == null || jsonString.isBlank()) {
       throw new IllegalArgumentException("Input JSON string is null or empty");
     }
+    
+    jsonString = jsonString.trim();
 
     // Check that json is not an object or an array
     char firstChar = jsonString.charAt(0);
