@@ -9,8 +9,9 @@ import mg.razherana.framework.web.annotations.Controller;
 import mg.razherana.framework.web.annotations.Url;
 import mg.razherana.framework.web.containers.ControllerContainer;
 import mg.razherana.framework.web.containers.RoutingContainer;
+import mg.razherana.framework.web.exceptions.WebMappingException;
 
-public class WebFinder {
+public final class WebFinder {
   private List<ControllerContainer> controllerContainers;
 
   public WebFinder(Map<Class<?>, List<Method>> controllerMethods) {
@@ -21,16 +22,33 @@ public class WebFinder {
     return this.controllerContainers;
   }
 
+  public static Object instanciateController(Class<?> controllerClass) {
+    Object controllerInstance = null;
+    // Check if record or not a class
+    if (controllerClass.isRecord())
+      throw new WebMappingException(
+          "The controller " + controllerClass + " must be a normal class. A record is not supported.");
+
+    if (controllerClass.isEnum())
+      throw new WebMappingException(
+          "The controller " + controllerClass + " must be a normal class. An enum is not supported.");
+
+    try {
+      controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
+    } catch (NoSuchMethodException e) {
+      throw new WebMappingException(
+          "The controller " + controllerClass + " has not empty args constructor. Please make one.", e);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+    return controllerInstance;
+  }
+
   private void initFromControllerMethods(Map<Class<?>, List<Method>> controllerMethods) {
     this.controllerContainers = new ArrayList<>();
-    
+
     for (Class<?> controllerClass : controllerMethods.keySet()) {
-      Object controllerInstance = null;
-      try {
-        controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
-      } catch (Exception e) {
-        e.printStackTrace();
-      }
+      Object controllerInstance = instanciateController(controllerClass);
 
       List<RoutingContainer> routingContainers = new ArrayList<>();
 

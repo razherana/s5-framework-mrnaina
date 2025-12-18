@@ -6,6 +6,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -13,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
 import mg.razherana.framework.web.utils.json.types.JsonArray;
@@ -55,25 +57,31 @@ public class RequestBody {
     String contentType = normalizeContentType(request.getContentType());
     JsonElement parsedJson = null;
 
+    boolean isMultipart = false;
+
+    try {
+      request.getParts();
+      isMultipart = true;
+    } catch (ServletException e) {
+      isMultipart = false;
+    } catch (IOException e) {
+      throw new WebExecutionException("I/O error when reading parts", e);
+    }
+
     if (rawBody != null && !rawBody.isBlank()) {
       if ("application/json".equals(contentType)) {
         parsedJson = parseJsonElement(rawBody);
         aggregated.putAll(jsonElementToBody(parsedJson));
-      } else if ("application/x-www-form-urlencoded".equals(contentType)) {
-        mergeUrlEncoded(aggregated, rawBody, encoding, true);
-      } else {
-        boolean parsed = false;
+      } else if (isMultipart) {
         try {
-          parsedJson = parseJsonElement(rawBody);
-          aggregated.putAll(jsonElementToBody(parsedJson));
-          parsed = true;
-        } catch (RuntimeException ex) {
-          // Fallback to urlencoded parsing when JSON parsing fails.
+          var parts = new ArrayList<>(request.getParts());
+          parts.forEach(e -> System.out.println(e.getContentType()));
+        } catch (IOException | ServletException e) {
+          throw new WebExecutionException("Error when reading parts", e);
         }
-
-        if (!parsed) {
-          mergeUrlEncoded(aggregated, rawBody, encoding, true);
-        }
+      } else if (contentType == null || contentType.isEmpty()
+          || "application/x-www-form-urlencoded".equals(contentType)) {
+        mergeUrlEncoded(aggregated, rawBody, encoding, true);
       }
     }
 
