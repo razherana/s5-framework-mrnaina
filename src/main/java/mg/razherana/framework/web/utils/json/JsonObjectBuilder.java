@@ -33,7 +33,7 @@ public class JsonObjectBuilder {
         jsonObject.add(name, JsonElement.of(value));
       }
     } catch (IllegalAccessException e) {
-      e.printStackTrace();
+      throw new RuntimeException("Failed to build JsonObject from class attributes", e);
     }
 
     return jsonObject;
