@@ -7,17 +7,15 @@ public class WebRouteContainer {
   private Method method;
   private HashMap<String, String> pathParameters;
   private Object controllerInstance;
+  private Class<?> controllerClass;
+  private ControllerContainer controllerContainer;
 
-  public WebRouteContainer(Method method, Object controllerInstance) {
-    this.method = method;
-    this.pathParameters = new HashMap<>();
-    this.controllerInstance = controllerInstance;
-  }
-
-  public WebRouteContainer(Method method, Object controllerInstance, HashMap<String, String> pathParameters) {
+  public WebRouteContainer(Method method, Object controllerInstance, HashMap<String, String> pathParameters, ControllerContainer controllerContainer) {
     this.method = method;
     this.pathParameters = pathParameters;
     this.controllerInstance = controllerInstance;
+    this.controllerContainer = controllerContainer;
+    this.controllerClass = controllerInstance.getClass();
   }
 
   public Method getMethod() {
@@ -42,5 +40,19 @@ public class WebRouteContainer {
 
   public void setControllerInstance(Object controllerInstance) {
     this.controllerInstance = controllerInstance;
+  }
+
+  /**
+   * @return the controllerClass
+   */
+  public Class<?> getControllerClass() {
+    return controllerClass;
+  }
+
+  /**
+   * @return the controllerContainer
+   */
+  public ControllerContainer getControllerContainer() {
+    return controllerContainer;
   }
 }

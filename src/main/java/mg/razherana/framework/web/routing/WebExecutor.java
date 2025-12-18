@@ -9,6 +9,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import mg.razherana.framework.App;
+import mg.razherana.framework.web.annotations.JsonUrl;
+import mg.razherana.framework.web.annotations.controllers.Prototype;
+import mg.razherana.framework.web.annotations.controllers.Stateful;
 import mg.razherana.framework.web.annotations.parameters.CreateSession;
 import mg.razherana.framework.web.annotations.parameters.ParamBody;
 import mg.razherana.framework.web.annotations.parameters.ParamVar;
@@ -53,9 +56,31 @@ public class WebExecutor {
 
   private Map<String, ResponseHandler> responseHandlerMap;
 
-  public WebExecutor(WebRouteContainer webRouteContainer, Map<String, ResponseHandler> responseHandlerMap) {
+  private final WebMapper webMapper;
+
+  public WebExecutor(WebRouteContainer webRouteContainer, Map<String, ResponseHandler> responseHandlerMap,
+      WebMapper webMapper) {
     this.webRouteContainer = webRouteContainer;
     this.responseHandlerMap = responseHandlerMap;
+    this.webMapper = webMapper;
+  }
+
+  private Object getControllerInstance(HttpServletRequest request) {
+    // Check if the controller is stateful
+    Class<?> controllerClass = webRouteContainer.getControllerClass();
+
+    var stateful = controllerClass.getDeclaredAnnotation(Stateful.class);
+    if (stateful != null) {
+      // Get the session from the request
+      return webMapper.getStatefulInstance(request, webRouteContainer.getControllerContainer());
+    }
+
+    if (controllerClass.isAnnotationPresent(Prototype.class)) {
+      return WebFinder.instanciateController(controllerClass);
+    }
+
+    // Default to singleton instance
+    return webRouteContainer.getControllerInstance();
   }
 
   public void execute(HttpServletRequest request,
@@ -68,8 +93,9 @@ public class WebExecutor {
     request.setAttribute("jspFunctionBridge", jspFunctionBridge);
 
     Method method = webRouteContainer.getMethod();
-    Object controllerInstance = webRouteContainer
-        .getControllerInstance();
+
+    // Decide to get the controller instance
+    Object controllerInstance = getControllerInstance(request);
 
     Map<String, String> pathParameters = webRouteContainer.getPathParameters();
 
@@ -84,7 +110,7 @@ public class WebExecutor {
     request.setAttribute("requestBody", requestBody);
 
     Object[] methodArgs = resolveMethodArgs(method, pathParameters,
-      request, response, requestBody);
+        request, response, requestBody);
 
     ResponseContainer rc = null;
 
@@ -100,6 +126,8 @@ public class WebExecutor {
         rc = new ResponseContainer(jsonElement, "json");
       } else if (responseObject instanceof ResponseBody responseBody) {
         rc = new ResponseContainer(responseBody, "json");
+      } else if (method.isAnnotationPresent(JsonUrl.class)) {
+        rc = new ResponseContainer(responseObject, "json");
       }
 
       if (rc == null)
@@ -258,14 +286,14 @@ public class WebExecutor {
         continue;
       }
 
+      if (argType == RequestBody.class || RequestBody.class.isAssignableFrom(argType)) {
+        argInstances[i] = requestBody;
+        continue;
+      }
+
       // Check if ParamBody
       if (arg.isAnnotationPresent(ParamBody.class)) {
         Map<String, Object> bodyMap = requestBody.asMap();
-
-        if (argType == RequestBody.class || RequestBody.class.isAssignableFrom(argType)) {
-          argInstances[i] = requestBody;
-          continue;
-        }
 
         if (argType == Map.class
             && arg.getParameterizedType().getTypeName().equals(

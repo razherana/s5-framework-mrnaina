@@ -3,21 +3,23 @@ package mg.razherana.framework.web.routing;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
-
 import jakarta.servlet.http.HttpServletRequest;
+import mg.razherana.framework.web.annotations.controllers.Stateful;
 import mg.razherana.framework.web.containers.ControllerContainer;
 import mg.razherana.framework.web.containers.RoutingContainer;
+import mg.razherana.framework.web.containers.StatefulControllerContainer;
 import mg.razherana.framework.web.containers.WebRouteContainer;
 import mg.razherana.framework.web.containers.RoutingContainer.HttpMethod;
 import mg.razherana.framework.web.exceptions.MalformedUserRouteException;
 
 public class WebMapper {
-  private WebFinder webFinder;
-
-  public WebMapper(WebFinder webFinder) {
-    this.webFinder = webFinder;
-  }
-
+  /**
+   * Normalize the path by removing leading and trailing slashes.
+   * This is useful for ensuring consistent path matching.
+   * 
+   * @param path
+   * @return
+   */
   public static String normalizePath(String path) {
     // Remove trailing and leading slashes for consistency
     if (path.endsWith("/")) {
@@ -31,11 +33,67 @@ public class WebMapper {
     return path;
   }
 
+  /**
+   * Combine two paths and normalize the result.
+   * This is useful for constructing full paths from base and sub-paths.
+   * 
+   * @param basePath
+   * @param subPath
+   * @return
+   */
   public static String combineAndNormalizePaths(String basePath, String subPath) {
     String combinedPath = normalizePath(basePath) + "/" + normalizePath(subPath);
     return normalizePath(combinedPath);
   }
 
+  private WebFinder webFinder;
+
+  public WebMapper(WebFinder webFinder) {
+    this.webFinder = webFinder;
+  }
+
+  /**
+   * Get a stateful instance of the controller for the given request.
+   * If the session already has a stateful controller container, it will return
+   * the instance from that container.
+   * If not, it will create a new stateful controller container and return the
+   * instance from that container.
+   * 
+   * @param request             the HTTP request
+   * @param controllerContainer the controller container to use for creating the
+   *                            stateful instance
+   * @return the stateful controller instance
+   * @throws IllegalArgumentException if the request or controllerContainer is
+   *                                  null
+   */
+  public Object getStatefulInstance(HttpServletRequest request, ControllerContainer controllerContainer) {
+    // Check nulls
+    if (request == null || controllerContainer == null) {
+      throw new IllegalArgumentException("Request and controller container cannot be null");
+    }
+
+    var session = request.getSession(true);
+    if (session != null && session.getId() != null && session.getAttribute(Stateful.SESSION_ATTRIBUTE_KEY) != null) {
+      return ((StatefulControllerContainer) session.getAttribute(Stateful.SESSION_ATTRIBUTE_KEY))
+          .fetchControllerInstance(request);
+    }
+    // Init a new stateful controller container
+    StatefulControllerContainer container = new StatefulControllerContainer(
+        controllerContainer,
+        request);
+    session.setAttribute(Stateful.SESSION_ATTRIBUTE_KEY, container);
+    return container.fetchControllerInstance(request);
+  }
+
+  /**
+   * Find the route method for the given HTTP request.
+   * This method extracts the path and HTTP method from the request,
+   * normalizes the path, and then searches for a matching route in the web
+   * finder.
+   * 
+   * @param request
+   * @return
+   */
   public WebRouteContainer findRouteMethod(HttpServletRequest request) {
     String path = request.getRequestURI();
     path = path.replace(request.getContextPath(), "");
@@ -55,6 +113,20 @@ public class WebMapper {
     return findRouteMethod(httpMethod, path);
   }
 
+  public WebFinder getWebFinder() {
+    return webFinder;
+  }
+
+  public void setWebFinder(WebFinder webFinder) {
+    this.webFinder = webFinder;
+  }
+
+  // Find the route method for the given HTTP method and path.
+  // This method iterates through all controllers and their routing containers,
+  // checking if the path matches any of the routing paths.
+  // If a match is found, it extracts the path parameters and returns a
+  // WebRouteContainer containing the method reflection and controller instance.
+  // If no match is found, it returns null.
   private WebRouteContainer findRouteMethod(HttpMethod httpMethod, String path) {
     for (ControllerContainer controller : webFinder.getControllerContainers()) {
       String controllerPath = normalizePath(controller.getControllerAnnotation().value());
@@ -77,7 +149,8 @@ public class WebMapper {
 
         WebRouteContainer dataMatch = checkPathMatchAndExtractParameters(fullRoutingPath, path,
             routing.getMethodReflection(),
-            controller.getControllerInstance());
+            controller.getControllerInstance(),
+            controller);
 
         System.out.println("[Fruits] : Data match is " + dataMatch);
 
@@ -149,7 +222,7 @@ public class WebMapper {
   }
 
   private WebRouteContainer checkPathMatchAndExtractParameters(String fullRoutingPath, String path, Method method,
-      Object controllerInstance) {
+      Object controllerInstance, ControllerContainer controllerContainer) {
 
     HashMap<String, String> pathParameters = extractPathParameters(fullRoutingPath, path);
 
@@ -158,17 +231,10 @@ public class WebMapper {
     if (pathParameters != null) {
       return new WebRouteContainer(method,
           controllerInstance,
-          pathParameters);
+          pathParameters,
+          controllerContainer);
     }
 
     return null;
-  }
-
-  public WebFinder getWebFinder() {
-    return webFinder;
-  }
-
-  public void setWebFinder(WebFinder webFinder) {
-    this.webFinder = webFinder;
   }
 }

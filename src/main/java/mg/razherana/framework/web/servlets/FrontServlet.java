@@ -5,6 +5,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 
 import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,7 @@ import mg.razherana.framework.web.exceptions.http.NotFoundException;
 import mg.razherana.framework.web.routing.WebExecutor;
 
 @WebServlet("/")
+@MultipartConfig
 public class FrontServlet extends HttpServlet {
 
   private App app;
@@ -121,7 +123,7 @@ public class FrontServlet extends HttpServlet {
       }
 
       // Execute the route
-      WebExecutor webExecutor = new WebExecutor(webRouteContainer, app.getResponseHandlerMap());
+      WebExecutor webExecutor = new WebExecutor(webRouteContainer, app.getResponseHandlerMap(), app.getWebMapper());
       webExecutor.execute(request, response, app);
     } catch (Exception e) {
       WebExecutor.sendException(request, response, e, app.getResponseHandlerMap());

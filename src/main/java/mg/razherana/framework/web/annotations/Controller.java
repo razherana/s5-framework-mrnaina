@@ -7,6 +7,11 @@ import java.lang.annotation.Target;
 
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
+/**
+ * Marks a class as a web controller.
+ * Controllers are responsible for handling web requests and returning responses.
+ * Singleton by default unless annotated with @Stateful or @Prototype.
+ */
 public @interface Controller {
   String value() default "";
 
