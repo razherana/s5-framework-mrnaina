@@ -37,14 +37,14 @@ public class StatefulControllerContainer {
   }
 
   public void reset(HttpServletRequest request, long accessTime) {
-    long delta = lastAccessedTime - creationTime;
+    long delta = accessTime - lastAccessedTime;
     if(delta >= timeout) {
       forceReset(request);
     }
   }
 
   public Object fetchControllerInstance(HttpServletRequest request) {
-    reset(request, lastAccessedTime);
+    reset(request, System.currentTimeMillis());
     return controllerInstance;
   }
 
