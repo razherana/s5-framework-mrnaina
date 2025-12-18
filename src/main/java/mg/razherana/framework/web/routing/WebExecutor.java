@@ -2,8 +2,6 @@ package mg.razherana.framework.web.routing;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 
 import jakarta.servlet.ServletContext;
@@ -11,6 +9,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import mg.razherana.framework.App;
+import mg.razherana.framework.web.annotations.JsonUrl;
+import mg.razherana.framework.web.annotations.controllers.Prototype;
+import mg.razherana.framework.web.annotations.controllers.Stateful;
 import mg.razherana.framework.web.annotations.parameters.CreateSession;
 import mg.razherana.framework.web.annotations.parameters.ParamBody;
 import mg.razherana.framework.web.annotations.parameters.ParamVar;
@@ -24,17 +25,62 @@ import mg.razherana.framework.web.exceptions.http.BadRequestException;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.utils.ConversionUtils;
 import mg.razherana.framework.web.utils.ModelView;
+import mg.razherana.framework.web.utils.RequestBody;
+import mg.razherana.framework.web.utils.ResponseBody;
+import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
 import mg.razherana.framework.web.utils.objectconversion.ConversionObjectUtils;
 
 public class WebExecutor {
+  public static void sendException(HttpServletRequest request,
+      HttpServletResponse response,
+      Exception e,
+      Map<String, ResponseHandler> respMap) {
+    ResponseContainer rc = new ResponseContainer(e, "error");
+
+    String type = rc.getReturnType();
+    ResponseHandler responseHandler = respMap.get(type);
+
+    if (responseHandler == null)
+      throw new WebExecutionException("No handler found for response type: " + type);
+
+    try {
+      responseHandler.handleResponse(rc, request, response);
+    } catch (Exception ex) {
+      throw new WebExecutionException("Error when handling the error exception", ex);
+    }
+  }
+
   private WebRouteContainer webRouteContainer;
+
   private Map<String, ResponseHandler> responseHandlerMap;
 
-  public WebExecutor(WebRouteContainer webRouteContainer, Map<String, ResponseHandler> responseHandlerMap) {
+  private final WebMapper webMapper;
+
+  public WebExecutor(WebRouteContainer webRouteContainer, Map<String, ResponseHandler> responseHandlerMap,
+      WebMapper webMapper) {
     this.webRouteContainer = webRouteContainer;
     this.responseHandlerMap = responseHandlerMap;
+    this.webMapper = webMapper;
+  }
+
+  private Object getControllerInstance(HttpServletRequest request) {
+    // Check if the controller is stateful
+    Class<?> controllerClass = webRouteContainer.getControllerClass();
+
+    var stateful = controllerClass.getDeclaredAnnotation(Stateful.class);
+    if (stateful != null) {
+      // Get the session from the request
+      return webMapper.getStatefulInstance(request, webRouteContainer.getControllerContainer());
+    }
+
+    if (controllerClass.isAnnotationPresent(Prototype.class)) {
+      return WebFinder.instanciateController(controllerClass);
+    }
+
+    // Default to singleton instance
+    return webRouteContainer.getControllerInstance();
   }
 
   public void execute(HttpServletRequest request,
@@ -47,8 +93,9 @@ public class WebExecutor {
     request.setAttribute("jspFunctionBridge", jspFunctionBridge);
 
     Method method = webRouteContainer.getMethod();
-    Object controllerInstance = webRouteContainer
-        .getControllerInstance();
+
+    // Decide to get the controller instance
+    Object controllerInstance = getControllerInstance(request);
 
     Map<String, String> pathParameters = webRouteContainer.getPathParameters();
 
@@ -59,19 +106,28 @@ public class WebExecutor {
     System.out
         .println("[Fruits] : Path parameters: " + pathParameters);
 
+    RequestBody requestBody = RequestBody.from(request);
+    request.setAttribute("requestBody", requestBody);
+
     Object[] methodArgs = resolveMethodArgs(method, pathParameters,
-        request, response);
+        request, response, requestBody);
 
     ResponseContainer rc = null;
 
     try {
       Object responseObject = method.invoke(controllerInstance, methodArgs);
 
-      if (responseObject instanceof String) {
+      if (method.isAnnotationPresent(JsonUrl.class)) {
+        rc = new ResponseContainer(responseObject, "json");
+      } else if (responseObject instanceof String) {
         ModelView mv = new ModelView(request, response);
         rc = mv.write((String) responseObject);
       } else if (responseObject instanceof ResponseContainer) {
         rc = (ResponseContainer) responseObject;
+      } else if (responseObject instanceof JsonElement jsonElement) {
+        rc = new ResponseContainer(jsonElement, "json");
+      } else if (responseObject instanceof ResponseBody responseBody) {
+        rc = new ResponseContainer(responseBody, "json");
       }
 
       if (rc == null)
@@ -88,6 +144,19 @@ public class WebExecutor {
       throw new WebExecutionException("No handler found for response type: " + type);
 
     responseHandler.handleResponse(rc, request, response);
+  }
+
+  public WebRouteContainer getWebRouteContainer() {
+    return webRouteContainer;
+  }
+
+  public void setWebRouteContainer(
+      WebRouteContainer webRouteContainer) {
+    this.webRouteContainer = webRouteContainer;
+  }
+
+  public Object getControllerInstance() {
+    return webRouteContainer.getControllerInstance();
   }
 
   private JspFunctionBridge instantiateJspUtils(
@@ -118,7 +187,8 @@ public class WebExecutor {
 
   private Object[] resolveMethodArgs(Method method,
       Map<String, String> pathParameters,
-      HttpServletRequest request, HttpServletResponse response) {
+      HttpServletRequest request, HttpServletResponse response,
+      RequestBody requestBody) {
     Parameter[] args = method.getParameters();
     Object[] argInstances = new Object[args.length];
 
@@ -172,32 +242,28 @@ public class WebExecutor {
         ParamVar paramVar = arg.getAnnotation(ParamVar.class);
         String varName = paramVar.value();
 
-        String varValue = request.getParameter(varName);
-        String[] varValues = request.getParameterValues(varName);
+        Object rawValue = requestBody.get(varName);
 
-        Object varValueObj = null;
-
-        if (arg.getType().isArray() && !paramVar.forceString()) {
-          varValueObj = varValues;
-        } else {
-          varValueObj = varValue;
-        }
-
-        if (varValueObj == null) {
+        if (rawValue == null) {
           if (paramVar.required()) {
             // The request object is being stored as additional data in the exception.
             throw new BadRequestException("Missing required parameter: " + varName, request);
           }
 
           // Use default value
-          varValueObj = paramVar.defaultValue();
+          rawValue = paramVar.defaultValue();
+        } else if (paramVar.forceString() && rawValue instanceof String[] values) {
+          rawValue = values.length > 0 ? values[0] : "";
         }
 
-        // Convert to appropriate type
-        Object convertedValue = ConversionUtils
-            .convertStringOrArrToType(varValueObj, argType);
+        try {
+          Object convertedValue = ConversionUtils
+              .convertStringOrArrToType(rawValue, argType, getControllerInstance());
 
-        argInstances[i] = convertedValue;
+          argInstances[i] = convertedValue;
+        } catch (IllegalArgumentException e) {
+          throw new BadRequestException("Type mismatch for parameter: " + varName, request);
+        }
         continue;
       }
 
@@ -220,60 +286,37 @@ public class WebExecutor {
         continue;
       }
 
+      if (argType == RequestBody.class || RequestBody.class.isAssignableFrom(argType)) {
+        argInstances[i] = requestBody;
+        continue;
+      }
+
       // Check if ParamBody
       if (arg.isAnnotationPresent(ParamBody.class)) {
-        System.out.println("[Fruits] : Type of @ParamBody is " + arg.getParameterizedType().getTypeName() + " - "
-            + arg.getParameterizedType());
+        Map<String, Object> bodyMap = requestBody.asMap();
 
-        Object returnObject = null;
-        Map<String, Object> paramBody = new HashMap<>();
-
-        var normalParamNames = request.getParameterNames();
-
-        normalParamNames.asIterator().forEachRemaining((e) -> {
-          var parameterValue = request.getParameter(e);
-          var parameterValues = request.getParameterValues(e);
-
-          System.out.println("[Fruits] : Name of parameter is " + e);
-          System.out.println("[Fruits] : parameterValue is " + parameterValue);
-          System.out.println("[Fruits] : parameterValues is "
-              + (parameterValues == null ? "Tsisy" : Arrays.deepToString(parameterValues)));
-
-          Object resultObject = null;
-
-          if (parameterValue == null && parameterValues == null)
-            return;
-
-          if (parameterValues != null)
-            resultObject = parameterValues;
-          else if (parameterValue != null && !parameterValue.isBlank())
-            resultObject = parameterValue;
-          else
-            return;
-
-          if (parameterValues.length == 1 && !e.endsWith("[]"))
-            resultObject = parameterValue;
-
-          paramBody.put(e, resultObject);
-        });
-
-        // Check param type if Map
         if (argType == Map.class
             && arg.getParameterizedType().getTypeName().equals(
                 "java.util.Map<java.lang.String, java.lang.Object>")) {
-          System.out.println("[Fruits] : Returning param body as Map<String, Object>");
-          returnObject = paramBody;
+          argInstances[i] = new java.util.HashMap<>(bodyMap);
+          continue;
         }
 
-        // Else, try to convert to the appropriate object
-        else {
-          System.out.println("[Fruits] : Converting param body to object of type "
-              + arg.getType().getName());
-          returnObject = ConversionObjectUtils
-              .convertMapToObject(paramBody, arg.getType(), getControllerInstance());
+        if (argType == JsonElement.class || JsonElement.class.isAssignableFrom(argType)) {
+          var jsonElement = requestBody.getJsonElement().orElse(null);
+
+          if (jsonElement == null) {
+            throw new BadRequestException("Request body is not JSON", request);
+          }
+
+          argInstances[i] = jsonElement;
+          continue;
         }
 
-        argInstances[i] = returnObject;
+        Object convertedObject = ConversionObjectUtils
+            .convertMapToObject(bodyMap, arg.getType(), getControllerInstance());
+
+        argInstances[i] = convertedObject;
         continue;
       }
 
@@ -285,37 +328,5 @@ public class WebExecutor {
     }
 
     return argInstances;
-  }
-
-  public WebRouteContainer getWebRouteContainer() {
-    return webRouteContainer;
-  }
-
-  public void setWebRouteContainer(
-      WebRouteContainer webRouteContainer) {
-    this.webRouteContainer = webRouteContainer;
-  }
-
-  public Object getControllerInstance() {
-    return webRouteContainer.getControllerInstance();
-  }
-
-  public static void sendException(HttpServletRequest request,
-      HttpServletResponse response,
-      Exception e,
-      Map<String, ResponseHandler> respMap) {
-    ResponseContainer rc = new ResponseContainer(e, "error");
-
-    String type = rc.getReturnType();
-    ResponseHandler responseHandler = respMap.get(type);
-
-    if (responseHandler == null)
-      throw new WebExecutionException("No handler found for response type: " + type);
-
-    try {
-      responseHandler.handleResponse(rc, request, response);
-    } catch (Exception ex) {
-      throw new WebExecutionException("Error when handling the error exception", ex);
-    }
   }
 }

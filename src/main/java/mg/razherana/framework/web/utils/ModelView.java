@@ -3,16 +3,19 @@ package mg.razherana.framework.web.utils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import mg.razherana.framework.web.containers.ResponseContainer;
+import mg.razherana.framework.web.utils.json.types.JsonElement;
 
 public class ModelView {
   private final HttpServletRequest request;
   private final HttpServletResponse response;
   private ResponseContainer responseContainer;
+  private final ResponseBody responseBody;
 
   public ModelView(HttpServletRequest request, HttpServletResponse response) {
     this.request = request;
     this.response = response;
     this.responseContainer = new ResponseContainer(null, null);
+    this.responseBody = new ResponseBody();
   }
 
   /**
@@ -36,7 +39,6 @@ public class ModelView {
     response.setHeader(name, value);
     return this;
   }
-  
   @SuppressWarnings("unchecked")
   public <T> T attribute(String name) {
     return (T) request.getAttribute(name);
@@ -44,6 +46,7 @@ public class ModelView {
 
   public ModelView attribute(String name, Object value) {
     request.setAttribute(name, value);
+    responseBody.put(name, value);
     return this;
   }
 
@@ -57,6 +60,20 @@ public class ModelView {
   public ResponseContainer write(final String value) {
     responseContainer.setReturnType("write");
     responseContainer.setReturnObject(value);
+
+    return responseContainer;
+  }
+
+  public ResponseContainer json() {
+    responseContainer.setReturnType("json");
+    responseContainer.setReturnObject(responseBody);
+
+    return responseContainer;
+  }
+
+  public ResponseContainer json(JsonElement element) {
+    responseContainer.setReturnType("json");
+    responseContainer.setReturnObject(element);
 
     return responseContainer;
   }

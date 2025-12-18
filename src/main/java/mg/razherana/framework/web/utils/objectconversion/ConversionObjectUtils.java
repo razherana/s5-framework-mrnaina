@@ -4,6 +4,7 @@ import java.lang.reflect.Constructor;
 import java.util.Map;
 
 import mg.razherana.framework.web.utils.ConversionUtils;
+import mg.razherana.framework.web.utils.json.types.JsonElement;
 
 public class ConversionObjectUtils {
   private ConversionObjectUtils() {
@@ -32,7 +33,7 @@ public class ConversionObjectUtils {
         var field = targetType.getDeclaredField(key);
         field.setAccessible(true);
 
-        Object convertedValue = ConversionUtils.convertStringOrArrToType(value, field.getType());
+        Object convertedValue = ConversionUtils.convertStringOrArrToType(value, field.getType(), outerInstance);
 
         if (field.getType().isPrimitive() && convertedValue == null) {
           // Skip setting primitive fields to null to avoid exceptions
@@ -53,8 +54,7 @@ public class ConversionObjectUtils {
     return instance;
   }
 
-  private static <T> T convertMapToRecord(Map<String, Object> parametersMap, Class<T> targetType,
-      Object outerInstance) {
+  private static <T> T convertMapToRecord(Map<String, Object> parametersMap, Class<T> targetType, Object outerInstance) {
     if (!targetType.isRecord()) {
       throw new ConversionObjectException("Target type is not a record: " + targetType.getName());
     }
@@ -67,7 +67,7 @@ public class ConversionObjectUtils {
       Class<?> componentType = component.getType();
 
       Object value = parametersMap.get(componentName);
-      Object convertedValue = ConversionUtils.convertStringOrArrToType(value, componentType);
+      Object convertedValue = ConversionUtils.convertStringOrArrToType(value, componentType, outerInstance);
 
       if (componentType.isPrimitive() && convertedValue == null) {
         // Skip setting primitive fields to null to avoid exceptions
@@ -111,6 +111,15 @@ public class ConversionObjectUtils {
       throw new ConversionObjectException("No default constructor found for type: " + targetType.getName(), e);
     } catch (Exception e) {
       throw new ConversionObjectException("Failed to instantiate object of type: " + targetType.getName(), e);
+    }
+  }
+
+  public static Object convertJsonToObject(JsonElement body, Class<?> type, Object controllerInstance) {
+    try {
+      Map<String, Object> paramMap = ConversionUtils.jsonElementToMap(body);
+      return convertMapToObject(paramMap, type, controllerInstance);
+    } catch (IllegalArgumentException e) {
+      throw new ConversionObjectException("Failed to convert JsonElement to object of type: " + type.getName(), e);
     }
   }
 }
