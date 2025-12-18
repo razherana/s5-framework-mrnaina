@@ -6,6 +6,7 @@ import mg.razherana.framework.web.utils.json.JsonObjectBuilder;
 import mg.razherana.framework.web.utils.json.JsonParser;
 
 public abstract class JsonElement {
+  @Override
   public abstract String toString();
 
   public abstract JsonType getType();
