@@ -40,12 +40,13 @@ public class StatefulControllerContainer {
     long delta = accessTime - creationTime;
     if(delta >= timeout) {
       forceReset(request);
+    } else {
+      this.lastAccessedTime = accessTime;
     }
-    this.lastAccessedTime = accessTime;
   }
 
   public Object fetchControllerInstance(HttpServletRequest request) {
-    reset(request, lastAccessedTime);
+    reset(request, System.currentTimeMillis());
     return controllerInstance;
   }
 
