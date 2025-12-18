@@ -22,7 +22,12 @@ public class JsonObject extends JsonElement {
       return;
     
     for (Map.Entry<?, ?> entry : value.entrySet()) {
-      members.put((String) entry.getKey(), JsonElement.of(entry.getValue()));
+      Object key = entry.getKey();
+      if (!(key instanceof String)) {
+        throw new IllegalArgumentException(
+            "JsonObject only supports String keys, but found: " + (key == null ? "null" : key.getClass().getName()));
+      }
+      members.put((String) key, JsonElement.of(entry.getValue()));
     }
   }
 
