@@ -16,7 +16,8 @@ public class StatefulControllerContainer {
   /**
    * Create a new StatefulControllerContainer.
    * 
-   * @param controllerClasses
+   * @param controllerContainer the controller container associated with this stateful instance
+   * @param request the HTTP request used to initialize the HTTP session
    */
   public StatefulControllerContainer(
       ControllerContainer controllerContainer,
