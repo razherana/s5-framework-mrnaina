@@ -3,7 +3,7 @@ package mg.razherana.framework.web.handlers.responses;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import mg.razherana.framework.web.containers.ResponseContainer;
-import mg.razherana.framework.web.utils.ResponseBody;
+import mg.razherana.framework.web.utils.http.ResponseBody;
 import mg.razherana.framework.web.utils.json.types.JsonElement;
 
 public class JsonResponseHandler implements ResponseHandler {

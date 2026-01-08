@@ -1,13 +1,16 @@
 package mg.razherana.framework.web.routing;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Map;
 
 import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.Part;
 import mg.razherana.framework.App;
 import mg.razherana.framework.web.annotations.JsonUrl;
 import mg.razherana.framework.web.annotations.controllers.Prototype;
@@ -25,8 +28,8 @@ import mg.razherana.framework.web.exceptions.http.BadRequestException;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.utils.ConversionUtils;
 import mg.razherana.framework.web.utils.ModelView;
-import mg.razherana.framework.web.utils.RequestBody;
-import mg.razherana.framework.web.utils.ResponseBody;
+import mg.razherana.framework.web.utils.http.RequestBody;
+import mg.razherana.framework.web.utils.http.ResponseBody;
 import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
@@ -85,6 +88,13 @@ public class WebExecutor {
 
   public void execute(HttpServletRequest request,
       HttpServletResponse response, App app) throws Exception {
+    // Set everything needed in request attributes
+    request.setAttribute("app", app);
+    request.setAttribute("webMapper", webMapper);
+    request.setAttribute("webRouteContainer", webRouteContainer);
+    request.setAttribute("webExecutor", this);
+    request.setAttribute("response", response);
+
     // Instanciate JSPUtils instances
     Map<String, Class<? extends JspUtil>> jspUtilMap = JspFunctionBridge.getJspUtilMap();
 
@@ -120,7 +130,7 @@ public class WebExecutor {
       if (method.isAnnotationPresent(JsonUrl.class)) {
         rc = new ResponseContainer(responseObject, "json");
       } else if (responseObject instanceof String) {
-        ModelView mv = new ModelView(request, response);
+        ModelView mv = new ModelView(request, response, requestBody);
         rc = mv.write((String) responseObject);
       } else if (responseObject instanceof ResponseContainer) {
         rc = (ResponseContainer) responseObject;
@@ -188,7 +198,7 @@ public class WebExecutor {
   private Object[] resolveMethodArgs(Method method,
       Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody) {
+      RequestBody requestBody) throws IOException, ServletException {
     Parameter[] args = method.getParameters();
     Object[] argInstances = new Object[args.length];
 
@@ -250,8 +260,9 @@ public class WebExecutor {
             throw new BadRequestException("Missing required parameter: " + varName, request);
           }
 
-          // Use default value
-          rawValue = paramVar.defaultValue();
+          // Use default value if not Part
+          if (!(rawValue instanceof Part))
+            rawValue = paramVar.defaultValue();
         } else if (paramVar.forceString() && rawValue instanceof String[] values) {
           rawValue = values.length > 0 ? values[0] : "";
         }
@@ -282,7 +293,7 @@ public class WebExecutor {
 
       // Check if ModelView
       if (argType.equals(ModelView.class)) {
-        argInstances[i] = new ModelView(request, response);
+        argInstances[i] = new ModelView(request, response, requestBody, webRouteContainer);
         continue;
       }
 
@@ -293,7 +304,7 @@ public class WebExecutor {
 
       // Check if ParamBody
       if (arg.isAnnotationPresent(ParamBody.class)) {
-        Map<String, Object> bodyMap = requestBody.asMap();
+        Map<String, ?> bodyMap = requestBody.asMap();
 
         if (argType == Map.class
             && arg.getParameterizedType().getTypeName().equals(
