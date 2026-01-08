@@ -10,7 +10,7 @@ public class ConversionObjectUtils {
   private ConversionObjectUtils() {
   }
 
-  public static <T> T convertMapToObject(Map<String, Object> parametersMap, Class<T> targetType, Object outerInstance) {
+  public static <T> T convertMapToObject(Map<String, ?> parametersMap, Class<T> targetType, Object outerInstance) {
     if (targetType == null) {
       throw new ConversionObjectException("Target type cannot be null");
     }
@@ -54,7 +54,7 @@ public class ConversionObjectUtils {
     return instance;
   }
 
-  private static <T> T convertMapToRecord(Map<String, Object> parametersMap, Class<T> targetType, Object outerInstance) {
+  private static <T> T convertMapToRecord(Map<String, ?> parametersMap, Class<T> targetType, Object outerInstance) {
     if (!targetType.isRecord()) {
       throw new ConversionObjectException("Target type is not a record: " + targetType.getName());
     }

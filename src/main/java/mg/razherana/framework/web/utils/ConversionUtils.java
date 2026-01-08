@@ -23,12 +23,16 @@ public class ConversionUtils {
     if (value == null)
       return null;
 
+    if (value.getClass().isInstance(targetType))
+      return value;
+
     if (targetType == null)
       throw new IllegalArgumentException("Target type cannot be null");
 
     if (targetType == Object.class || targetType.isInstance(value))
       return value;
 
+    // Handle array conversion
     if (targetType.isArray() && value instanceof String[] stringArray) {
       if (targetType == String[].class)
         return stringArray;

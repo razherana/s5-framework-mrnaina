@@ -1,4 +1,4 @@
-package mg.razherana.framework.web.utils;
+package mg.razherana.framework.web.utils.http;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

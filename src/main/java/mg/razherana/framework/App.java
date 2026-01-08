@@ -12,6 +12,7 @@ import mg.razherana.framework.scanners.ScanControllers;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
 import mg.razherana.framework.web.handlers.responses.ErrorResponseHandler;
 import mg.razherana.framework.web.handlers.responses.JspViewResponseHandler;
+import mg.razherana.framework.web.handlers.responses.RedirectResponseHandler;
 import mg.razherana.framework.web.handlers.responses.JsonResponseHandler;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.handlers.responses.WriteResponseHandler;
@@ -95,6 +96,7 @@ public class App {
     responseHandlerMap.put("write", new WriteResponseHandler());
     responseHandlerMap.put("json", new JsonResponseHandler());
     responseHandlerMap.put("error", new ErrorResponseHandler());
+    responseHandlerMap.put("redirect", new RedirectResponseHandler());
 
     // Set the custom ones
     try {

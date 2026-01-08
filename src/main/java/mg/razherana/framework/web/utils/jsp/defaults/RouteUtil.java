@@ -29,9 +29,17 @@ public class RouteUtil extends JspUtil {
     }
   }
 
+  private WebMapper webMapper;
+  private HttpServletRequest request;
+
   private static final String VIEW_NAME = "$route";
 
   public RouteUtil() {
+  }
+
+  public RouteUtil(HttpServletRequest request) {
+    this.request = request;
+    this.webMapper = (WebMapper) request.getAttribute("webMapper");
   }
 
   @Override
@@ -41,9 +49,18 @@ public class RouteUtil extends JspUtil {
 
   @Override
   public Object run(Object... args) {
-    App app = (App) getData().get("app");
-    List<ControllerContainer> controllerContainers = app.getWebMapper().getWebFinder().getControllerContainers();
-    String contextPath = ((HttpServletRequest) getData().get("request")).getContextPath();
+    if (webMapper == null) {
+      App app = (App) getData().get("app");
+      webMapper = app.getWebMapper();
+    }
+
+    List<ControllerContainer> controllerContainers = webMapper.getWebFinder().getControllerContainers();
+
+    if (request == null) {
+      request = (HttpServletRequest) getData().get("request");
+    }
+
+    String contextPath = request.getContextPath();
 
     DataDTO dataDTO = findVarsFromArgs(args);
 
