@@ -116,6 +116,16 @@ public class ModelView {
   }
 
   /**
+   * Get the real path of a relative path in the server.
+   * 
+   * @param relativePath
+   * @return
+   */
+  public String realPath(String relativePath) {
+    return request.getServletContext().getRealPath(relativePath);
+  }
+
+  /**
    * Redirect to a route absolute to the application.
    * Eg: routeAbsolute("usercontroller/updateForm", "id=123", "?queryParam=value")
    * 
