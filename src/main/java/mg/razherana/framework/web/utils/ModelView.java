@@ -57,6 +57,29 @@ public class ModelView {
   }
 
   /**
+   * Get session attribute.
+   * 
+   * @param <T>  The type of the session attribute.
+   * @param name the name of the session attribute.
+   * @return
+   */
+  @SuppressWarnings("unchecked")
+  public <T> T session(String name) {
+    return (T) request.getSession(true).getAttribute(name);
+  }
+
+  /**
+   * Set session attribute.
+   * 
+   * @param name  the name of the session attribute.
+   * @param value the value of the session attribute.
+   * @return
+   */
+  public void session(String name, Object value) {
+    request.getSession(true).setAttribute(name, value);
+  }
+
+  /**
    * Redirect to an absolute location.
    * 
    * @param location
@@ -138,7 +161,7 @@ public class ModelView {
     Object[] args = new Object[pathParameters.length + 1];
     args[0] = controllerAndRoute;
     System.arraycopy(pathParameters, 0, args, 1, pathParameters.length);
-    
+
     String path = (String) new RouteUtil(request).run(args);
 
     return redirectAbsolute(path);
