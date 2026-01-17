@@ -1,8 +1,10 @@
 package mg.razherana.framework.web.routing;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.HashMap;
 import java.util.Map;
 
 import jakarta.servlet.ServletContext;
@@ -25,7 +27,10 @@ import mg.razherana.framework.web.containers.WebRouteContainer;
 import mg.razherana.framework.web.exceptions.MalformedWebAnnotationException;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
 import mg.razherana.framework.web.exceptions.http.BadRequestException;
+import mg.razherana.framework.web.givers.Giver;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
+import mg.razherana.framework.web.middlewares.Middleware;
+import mg.razherana.framework.web.middlewares.annotations.Middlewares;
 import mg.razherana.framework.web.utils.ConversionUtils;
 import mg.razherana.framework.web.utils.ModelView;
 import mg.razherana.framework.web.utils.http.RequestBody;
@@ -119,18 +124,47 @@ public class WebExecutor {
     RequestBody requestBody = RequestBody.from(request);
     request.setAttribute("requestBody", requestBody);
 
-    Object[] methodArgs = resolveMethodArgs(method, pathParameters,
-        request, response, requestBody);
+    ModelView mv = new ModelView(request, response, requestBody, webRouteContainer);
 
+    Map<Class<?>, Middleware> middlewares = initMiddlewares(request, response, mv);
+    Map<Class<?>, Giver> givers = initGivers(request, response, mv);
+
+    Object[] methodArgs = resolveMethodArgs(method, pathParameters,
+        request, response, requestBody, mv, givers);
+
+    Object middlewareBeforeResult = null;
+
+    // Execute middlewares before method execution
+    for (Middleware middleware : middlewares.values()) {
+      Object beforeResult = middleware.before(request, response, mv);
+      middlewareBeforeResult = beforeResult;
+
+      if (middlewareBeforeResult != null)
+        break;
+    }
+
+    Object responseObject = null;
     ResponseContainer rc = null;
 
     try {
-      Object responseObject = method.invoke(controllerInstance, methodArgs);
+      if (middlewareBeforeResult != null) {
+        responseObject = middlewareBeforeResult;
+      } else {
+        responseObject = method.invoke(controllerInstance, methodArgs);
+
+        // Execute middlewares after method execution
+        for (Middleware middleware : middlewares.values()) {
+          Object afterResult = middleware.after(request, response, mv, responseObject);
+          if (afterResult != null) {
+            responseObject = afterResult;
+            break;
+          }
+        }
+      }
 
       if (method.isAnnotationPresent(JsonUrl.class)) {
         rc = new ResponseContainer(responseObject, "json");
       } else if (responseObject instanceof String) {
-        ModelView mv = new ModelView(request, response, requestBody);
         rc = mv.write((String) responseObject);
       } else if (responseObject instanceof ResponseContainer) {
         rc = (ResponseContainer) responseObject;
@@ -198,13 +232,28 @@ public class WebExecutor {
   private Object[] resolveMethodArgs(Method method,
       Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody) throws IOException, ServletException {
+      RequestBody requestBody,
+      ModelView mv,
+      Map<Class<?>, Giver> givers) throws IOException, ServletException {
     Parameter[] args = method.getParameters();
     Object[] argInstances = new Object[args.length];
 
     for (int i = 0; i < args.length; i++) {
       Parameter arg = args[i];
       Class<?> argType = arg.getType();
+
+      // Check if arg is a Giver
+      if (Giver.class.isAssignableFrom(argType)) {
+        Giver giver = givers.get(argType.asSubclass(Giver.class));
+        if (giver == null) {
+          // Should not happen
+          throw new MalformedWebAnnotationException(
+              "Giver of type " + argType.getName()
+                  + " cannot be provided for method: " + method.getName());
+        }
+        argInstances[i] = giver;
+        continue;
+      }
 
       // Check if annotated with @PathVar
       if (arg.isAnnotationPresent(PathVar.class)) {
@@ -293,7 +342,7 @@ public class WebExecutor {
 
       // Check if ModelView
       if (argType.equals(ModelView.class)) {
-        argInstances[i] = new ModelView(request, response, requestBody, webRouteContainer);
+        argInstances[i] = mv;
         continue;
       }
 
@@ -339,5 +388,95 @@ public class WebExecutor {
     }
 
     return argInstances;
+  }
+
+  private Map<Class<?>, Giver> initGivers(HttpServletRequest request, HttpServletResponse response,
+      ModelView mv) throws ServletException {
+    Map<Class<?>, Giver> givers = new HashMap<>();
+
+    Method method = getWebRouteContainer().getMethod();
+
+    Parameter[] parameters = method.getParameters();
+
+    for (Parameter parameter : parameters) {
+      Class<?> paramType = parameter.getType();
+
+      if (Giver.class.isAssignableFrom(paramType)) {
+        Constructor<?> constructor;
+        try {
+          constructor = paramType.getDeclaredConstructor();
+        } catch (NoSuchMethodException e) {
+          throw new MalformedWebAnnotationException(
+              "Giver class " + paramType.getName()
+                  + " must have a constructor with no parameters");
+        }
+
+        Giver giverInstance;
+        try {
+          giverInstance = (Giver) constructor.newInstance();
+        } catch (Exception e) {
+          throw new WebExecutionException(
+              "Error instantiating giver: " + paramType.getName(), e);
+        }
+
+        // Initialize the giver
+        giverInstance.init(request, response, mv);
+
+        givers.put(paramType, giverInstance);
+      }
+    }
+
+    return givers;
+  }
+
+  private Map<Class<?>, Middleware> initMiddlewares(HttpServletRequest request,
+      HttpServletResponse response, ModelView mv) {
+    Map<Class<?>, Middleware> middlewares = new HashMap<>();
+
+    Class<?> controllerClass = getWebRouteContainer().getControllerClass();
+
+    // Get all middlewares for this controller
+    Middlewares middlewaresAnnot = controllerClass.getAnnotation(Middlewares.class);
+
+    // Get all middlewares for this method
+    Method method = getWebRouteContainer().getMethod();
+    Middlewares methodMiddlewaresAnnot = method.getAnnotation(Middlewares.class);
+
+    Class<?>[] middlewareClasses = {};
+
+    if (middlewaresAnnot != null) {
+      middlewareClasses = middlewaresAnnot.value();
+    }
+
+    if (methodMiddlewaresAnnot != null) {
+      Class<?>[] methodMiddlewareClasses = methodMiddlewaresAnnot.value();
+      Class<?>[] combined = new Class<?>[middlewareClasses.length + methodMiddlewareClasses.length];
+      System.arraycopy(middlewareClasses, 0, combined, 0, middlewareClasses.length);
+      System.arraycopy(methodMiddlewareClasses, 0, combined, middlewareClasses.length, methodMiddlewareClasses.length);
+      middlewareClasses = combined;
+    }
+
+    for (Class<?> middlewareClass : middlewareClasses) {
+      Constructor<?> constructor;
+      try {
+        constructor = middlewareClass.getDeclaredConstructor();
+      } catch (NoSuchMethodException e) {
+        throw new MalformedWebAnnotationException(
+            "Middleware class " + middlewareClass.getName()
+                + " must have a constructor with no parameters");
+      }
+
+      Middleware middlewareInstance;
+      try {
+        middlewareInstance = (Middleware) constructor.newInstance();
+      } catch (Exception e) {
+        throw new WebExecutionException(
+            "Error instantiating middleware: " + middlewareClass.getName(), e);
+      }
+
+      middlewares.put(middlewareClass, middlewareInstance);
+    }
+
+    return middlewares;
   }
 }
