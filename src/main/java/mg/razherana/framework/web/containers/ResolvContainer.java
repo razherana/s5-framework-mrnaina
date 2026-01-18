@@ -2,17 +2,17 @@ package mg.razherana.framework.web.containers;
 
 import java.lang.reflect.Method;
 
-import mg.razherana.framework.web.givers.annotations.Impl;
-import mg.razherana.framework.web.givers.annotations.Resolve;
+import mg.razherana.framework.web.utils.proxies.annotations.Impl;
+import mg.razherana.framework.web.utils.proxies.annotations.Resolve;
 
-public class GiverContainer {
+public class ResolvContainer {
   private Method implMethod;
   private Impl implAnnotation;
 
   private Method resolveMethod;
   private Resolve resolveAnnotation;
 
-  private Class<?> giverClass;
+  private Class<?> mainClass;
 
   /**
    * @param implMethod
@@ -21,13 +21,13 @@ public class GiverContainer {
    * @param resolveAnnotation
    * @param giverClass
    */
-  public GiverContainer(Method implMethod, Impl implAnnotation, Method resolveMethod, Resolve resolveAnnotation,
+  public ResolvContainer(Method implMethod, Impl implAnnotation, Method resolveMethod, Resolve resolveAnnotation,
       Class<?> giverClass) {
     this.implMethod = implMethod;
     this.implAnnotation = implAnnotation;
     this.resolveMethod = resolveMethod;
     this.resolveAnnotation = resolveAnnotation;
-    this.giverClass = giverClass;
+    this.mainClass = giverClass;
   }
 
   /**
@@ -89,15 +89,15 @@ public class GiverContainer {
   /**
    * @return the giverClass
    */
-  public Class<?> getGiverClass() {
-    return giverClass;
+  public Class<?> getMainClass() {
+    return mainClass;
   }
 
   /**
    * @param giverClass the giverClass to set
    */
-  public void setGiverClass(Class<?> giverClass) {
-    this.giverClass = giverClass;
+  public void setMainClass(Class<?> giverClass) {
+    this.mainClass = giverClass;
   }
 
 }

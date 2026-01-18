@@ -1,4 +1,4 @@
-package mg.razherana.framework.web.givers.annotations;
+package mg.razherana.framework.web.utils.proxies.annotations;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

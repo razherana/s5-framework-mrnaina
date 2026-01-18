@@ -1,11 +1,15 @@
 package mg.razherana.framework.web.routing;
 
 import java.io.IOException;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,18 +20,18 @@ import mg.razherana.framework.web.annotations.controllers.Prototype;
 import mg.razherana.framework.web.annotations.controllers.Stateful;
 import mg.razherana.framework.web.containers.ResponseContainer;
 import mg.razherana.framework.web.containers.WebRouteContainer;
-import mg.razherana.framework.web.exceptions.MalformedWebAnnotationException;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
 import mg.razherana.framework.web.givers.Giver;
-import mg.razherana.framework.web.givers.proxies.GiverMethodInterceptor;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.middlewares.Middleware;
 import mg.razherana.framework.web.middlewares.annotations.Middlewares;
 import mg.razherana.framework.web.routing.argsresolver.ArgResolver;
+import mg.razherana.framework.web.routing.argsresolver.providers.AnnotationProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.GiverProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.HttpServletRequestProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.HttpServletResponseProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.HttpSessionProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.MethodProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.ModelViewProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.ParamBodyProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.ParamVarProvider;
@@ -36,11 +40,13 @@ import mg.razherana.framework.web.routing.argsresolver.providers.PathVarsProvide
 import mg.razherana.framework.web.routing.argsresolver.providers.RequestBodyProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.ServletContextProvider;
 import mg.razherana.framework.web.utils.ModelView;
+import mg.razherana.framework.web.utils.ReflectUtils;
 import mg.razherana.framework.web.utils.http.RequestBody;
 import mg.razherana.framework.web.utils.http.ResponseBody;
 import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
+import mg.razherana.framework.web.utils.proxies.MethodInterceptor;
 
 public class WebExecutor {
   private static final ArgResolver argResolver = new ArgResolver();
@@ -58,6 +64,8 @@ public class WebExecutor {
     argResolver.registerProvider(new ModelViewProvider());
     argResolver.registerProvider(new RequestBodyProvider());
     argResolver.registerProvider(new ParamBodyProvider());
+    argResolver.registerProvider(new MethodProvider());
+    argResolver.registerProvider(new AnnotationProvider());
   }
 
   public static void sendException(HttpServletRequest request,
@@ -167,8 +175,15 @@ public class WebExecutor {
 
     ModelView mv = new ModelView(request, response, requestBody, webRouteContainer);
 
-    Map<Class<?>, Middleware> middlewares = initMiddlewares(request, response, mv);
-    Map<Class<?>, Giver> givers = initGivers(request, response, mv, pathParameters, requestBody);
+    Map<Class<?>, Giver> givers = new HashMap<>();
+
+    Map<Class<?>, Middleware> middlewares = initMiddlewares(request, response, mv, pathParameters, requestBody, givers);
+
+    initGivers(givers, middlewares, method.getParameters(), request, response, mv, pathParameters,
+        requestBody);
+
+    System.out.println("[Fruits] : Givers initialized: " + givers.keySet().stream()
+        .map(Class::getName).reduce((a, b) -> a + ", " + b).orElse("none"));
 
     Object[] methodArgs = WebExecutor.resolveArgs(this, method, pathParameters,
         request, response, requestBody, mv, givers);
@@ -177,7 +192,7 @@ public class WebExecutor {
 
     // Execute middlewares before method execution
     for (Middleware middleware : middlewares.values()) {
-      Object beforeResult = middleware.before(request, response, mv);
+      Object beforeResult = middleware.before();
       middlewareBeforeResult = beforeResult;
 
       if (middlewareBeforeResult != null)
@@ -195,7 +210,7 @@ public class WebExecutor {
 
         // Execute middlewares after method execution
         for (Middleware middleware : middlewares.values()) {
-          Object afterResult = middleware.after(request, response, mv, responseObject);
+          Object afterResult = middleware.after();
           if (afterResult != null) {
             responseObject = afterResult;
             break;
@@ -288,19 +303,32 @@ public class WebExecutor {
     return jspFunctionBridge;
   }
 
-  private Map<Class<?>, Giver> initGivers(HttpServletRequest request, HttpServletResponse response,
+  private Map<Class<?>, Giver> initGivers(Iterable<Class<?>> resolvClasses, HttpServletRequest request,
+      HttpServletResponse response,
       ModelView mv, Map<String, String> pathParameters, RequestBody requestBody) throws ServletException {
     Map<Class<?>, Giver> givers = new HashMap<>();
+    var keySet = getWebMapper().getWebFinder().getResolvContainers().keySet();
 
-    Method method = getWebRouteContainer().getMethod();
+    for (Class<?> resolvClass : resolvClasses) {
 
-    Parameter[] parameters = method.getParameters();
+      if (Giver.class.isAssignableFrom(resolvClass)) {
+        // Get the youngest child class from the givers map
+        Class<?> youngestChildClass = ReflectUtils.getYoungestChildClass(resolvClass,
+            keySet);
 
-    for (Parameter parameter : parameters) {
-      Class<?> paramType = parameter.getType();
+        System.out.println("[Fruits/InitGivers] : For parameter of type " + resolvClass.getName()
+            + ", youngest child class is "
+            + (youngestChildClass != null ? youngestChildClass.getName()
+                : "null. Givers available: "
+                    + keySet.stream()
+                        .map(Class::getName).reduce((a, b) -> a + ", " + b).orElse("none")));
 
-      if (Giver.class.isAssignableFrom(paramType)) {
-        Giver giverInstance = GiverMethodInterceptor.getGiverInstance(paramType,
+        if (givers.containsKey(youngestChildClass))
+          continue;
+
+        Giver giverInstance = (Giver) MethodInterceptor.getInstance(
+            youngestChildClass,
+            Giver.class,
             this,
             pathParameters,
             request,
@@ -311,15 +339,78 @@ public class WebExecutor {
 
         giverInstance.init(request, response, mv);
 
-        givers.put(paramType, giverInstance);
+        givers.put(youngestChildClass, giverInstance);
       }
     }
 
     return givers;
   }
 
-  private Map<Class<?>, Middleware> initMiddlewares(HttpServletRequest request,
-      HttpServletResponse response, ModelView mv) {
+  private Map<Class<?>, Giver> initGivers(Map<Class<?>, Giver> givers, Map<Class<?>, Middleware> middlewares,
+      Parameter[] parameters,
+      HttpServletRequest request,
+      HttpServletResponse response,
+      ModelView mv, Map<String, String> pathParameters, RequestBody requestBody) throws ServletException {
+    List<Class<?>> resolvClasses = new ArrayList<>();
+
+    var resolvClassesSet = getWebMapper().getWebFinder().getResolvContainers().keySet();
+
+    // First loop is the controller's parameters
+    for (Parameter parameter : parameters)
+      if (Giver.class.isAssignableFrom(parameter.getType()) && parameter.getType() != Giver.class) {
+        Class<?> youngestChildClass = ReflectUtils.getYoungestChildClass(parameter.getType(),
+            resolvClassesSet);
+
+        resolvClasses.add(youngestChildClass);
+      }
+
+    // Add middlewares' givers
+    for (Class<?> middlewareClass : middlewares.keySet()) {
+      resolvClasses.add(middlewareClass);
+    }
+
+    // Third loop is all methods of givers found until now
+    var resolvContainers = getWebMapper().getWebFinder().getResolvContainers();
+
+    for (int i = 0; i < resolvClasses.size(); i++) {
+      Class<?> clazz = resolvClasses.get(i);
+
+      System.out.println("[Fruits] : Inspecting resolv class => " + clazz);
+
+      // Get the youngest child class from the givers map
+      Class<?> youngestChildClass = ReflectUtils.getYoungestChildClass(clazz,
+          resolvClassesSet);
+
+      var resolvContainerList = resolvContainers.get(youngestChildClass);
+
+      if (resolvContainerList == null) {
+        System.out.println("[Fruits] : Did not found resolvContainerList in " + youngestChildClass);
+        continue;
+      }
+
+      for (var container : resolvContainerList) {
+        var parametersOfImpl = container.getImplMethod().getParameters();
+
+        for (Parameter parameter : parametersOfImpl)
+          if (Giver.class.isAssignableFrom(parameter.getType()) && parameter.getType() != Giver.class)
+            if (!resolvClasses.contains(parameter.getType()))
+              resolvClasses.add(parameter.getType());
+      }
+    }
+
+    System.out.println("[Fruits] : All resolv classes before filtering: " + resolvClasses);
+
+    resolvClasses.removeIf((clazz) -> !Giver.class.isAssignableFrom(clazz));
+
+    System.out.println("[Fruits] : All resolv classes after filtering: " + resolvClasses);
+
+    givers.putAll(initGivers(resolvClasses, request, response, mv, pathParameters, requestBody));
+
+    return givers;
+  }
+
+  private Map<Class<?>, Middleware> initMiddlewares(HttpServletRequest request, HttpServletResponse response,
+      ModelView mv, Map<String, String> pathParameters, RequestBody requestBody, Map<Class<?>, Giver> givers) {
     Map<Class<?>, Middleware> middlewares = new HashMap<>();
 
     Class<?> controllerClass = getWebRouteContainer().getControllerClass();
@@ -331,37 +422,27 @@ public class WebExecutor {
     Method method = getWebRouteContainer().getMethod();
     Middlewares methodMiddlewaresAnnot = method.getAnnotation(Middlewares.class);
 
-    Class<?>[] middlewareClasses = {};
+    Set<Class<?>> middlewareClasses = new HashSet<>();
 
     if (middlewaresAnnot != null) {
-      middlewareClasses = middlewaresAnnot.value();
+      middlewareClasses = new HashSet<>(Arrays.asList(middlewaresAnnot.value()));
     }
 
     if (methodMiddlewaresAnnot != null) {
-      Class<?>[] methodMiddlewareClasses = methodMiddlewaresAnnot.value();
-      Class<?>[] combined = new Class<?>[middlewareClasses.length + methodMiddlewareClasses.length];
-      System.arraycopy(middlewareClasses, 0, combined, 0, middlewareClasses.length);
-      System.arraycopy(methodMiddlewareClasses, 0, combined, middlewareClasses.length, methodMiddlewareClasses.length);
-      middlewareClasses = combined;
+      middlewareClasses.addAll(Arrays.asList(methodMiddlewaresAnnot.value()));
     }
 
     for (Class<?> middlewareClass : middlewareClasses) {
-      Constructor<?> constructor;
-      try {
-        constructor = middlewareClass.getDeclaredConstructor();
-      } catch (NoSuchMethodException e) {
-        throw new MalformedWebAnnotationException(
-            "Middleware class " + middlewareClass.getName()
-                + " must have a constructor with no parameters");
-      }
-
-      Middleware middlewareInstance;
-      try {
-        middlewareInstance = (Middleware) constructor.newInstance();
-      } catch (Exception e) {
-        throw new WebExecutionException(
-            "Error instantiating middleware: " + middlewareClass.getName(), e);
-      }
+      Middleware middlewareInstance = (Middleware) MethodInterceptor.getInstance(
+          middlewareClass,
+          Middleware.class,
+          this,
+          pathParameters,
+          request,
+          response,
+          requestBody,
+          mv,
+          givers);
 
       middlewares.put(middlewareClass, middlewareInstance);
     }

@@ -19,10 +19,10 @@ import mg.razherana.framework.web.utils.ModelView;
  * 
  * <p>
  * Giver's methods can be annotated with
- * {@link mg.razherana.framework.web.givers.annotations.Resolve} to be
+ * {@link mg.razherana.framework.web.utils.proxies.annotations.Resolve} to be
  * dynamically
  * ran. It must be linked with a
- * {@link mg.razherana.framework.web.givers.annotations.Impl} annotation on
+ * {@link mg.razherana.framework.web.utils.proxies.annotations.Impl} annotation on
  * another method that contains the actual
  * parameters to be injected.
  * </p>

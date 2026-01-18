@@ -1,50 +1,41 @@
 package mg.razherana.framework.web.middlewares;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import mg.razherana.framework.web.utils.ModelView;
+import mg.razherana.framework.web.utils.proxies.MotherResolv;
+import mg.razherana.framework.web.utils.proxies.annotations.Resolve;
 
-public interface Middleware {
-  /**
-   * This method is ran before the controller's method is ran.
-   * 
-   * <p>
-   * If we return a non-null object, the execution will be stopped and other
-   * middlewares plus the controller's method will not be executed.
-   * </p>
-   * 
-   * @param request
-   * @param response
-   * @param modelView
-   * 
-   * @return Object If you want to stop the execution and return a
-   *         response directly or null to continue the execution.
-   */
-  default public Object before(HttpServletRequest request, HttpServletResponse response,
-      ModelView modelView) {
-    return null;
-  }
+/**
+ * Middleware interface for web request processing.
+ * Middlewares can use @Impl and @Resolve annotations to inject like Givers and
+ * Controller's Urls.
+ */
+// Implementing MotherResolv to be used in WebFinder
+public abstract class Middleware implements MotherResolv {
 
   /**
-   * This method is ran after the controller's method is ran.
+   * Method to be executed before the controller's method.
    * 
-   * <p>
-   * If we return a non-null object, the execution will be stopped and other
-   * middlewares
-   * after methods will not be executed.
-   * </p>
-   * 
-   * @param request
-   * @param response
-   * @param modelView
-   * @param controllerResponse The response returned by the controller's method.
-   * 
-   * @return Object If you want to stop the execution
-   *         and return a response directly or null to continue with the
-   *         controller's response.
+   * @return Null to continue the execution chain, or an object to short-circuit
+   *         the execution and return that object as the response.
    */
-  default public Object after(HttpServletRequest request, HttpServletResponse response,
-      ModelView modelView, Object controllerResponse) {
+  @Resolve
+  abstract public Object before();
+
+  /**
+   * Method that should be ran in afterResponse.
+   * 
+   * @return The object to send to {@link #afterResponse(Object)}
+   */
+  @Resolve
+  abstract public Object after();
+
+  /**
+   * Method to be executed after the controller's method.
+   * 
+   * @param controllerResponse The response from the controller's method.
+   * @return The modified response to send back to the client. Null means no
+   *         modification.
+   */
+  public Object afterResponse(Object controllerResponse) {
     return null;
   }
 }

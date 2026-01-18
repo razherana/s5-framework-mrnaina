@@ -1,4 +1,4 @@
-package mg.razherana.framework.web.givers.proxies;
+package mg.razherana.framework.web.utils.proxies;
 
 import java.util.Map;
 
@@ -9,12 +9,14 @@ import mg.razherana.framework.web.routing.WebExecutor;
 import mg.razherana.framework.web.utils.ModelView;
 import mg.razherana.framework.web.utils.http.RequestBody;
 
-public record GiverInterceptorContext(
+public record InterceptorContext(
     WebExecutor executor,
     Map<String, String> pathParameters,
     HttpServletRequest request,
     HttpServletResponse response,
     RequestBody requestBody,
     ModelView mv,
-    Map<Class<?>, Giver> givers) {
+    Map<Class<?>, Giver> givers,
+    Class<?> resolvClass
+  ) {
 }
