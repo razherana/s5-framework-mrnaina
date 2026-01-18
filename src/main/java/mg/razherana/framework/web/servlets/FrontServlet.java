@@ -40,6 +40,9 @@ public class FrontServlet extends HttpServlet {
     // Find all controllers at startup
     app.scanControllers(basePackage);
 
+    // Find all givers at startup
+    app.scanGivers(basePackage);
+
     // Get all the custom response handlers + default ones
     app.initResponseHandlers(getServletContext());
 

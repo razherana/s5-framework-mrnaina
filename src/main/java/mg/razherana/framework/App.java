@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import jakarta.servlet.ServletContext;
 import mg.razherana.framework.scanners.ScanControllers;
+import mg.razherana.framework.scanners.ScanGivers;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
 import mg.razherana.framework.web.handlers.responses.ErrorResponseHandler;
 import mg.razherana.framework.web.handlers.responses.JspViewResponseHandler;
@@ -50,6 +51,7 @@ public class App {
   private WebFinder webFinder;
   private WebMapper webMapper;
   private final Map<String, ResponseHandler> responseHandlerMap = new HashMap<>();
+  private List<Class<?>> giverClasses;
 
   public App(List<Class<?>> controllerClasses, Map<Class<?>, List<Method>> urlControllerMap) {
     this.controllerClasses = controllerClasses;
@@ -73,6 +75,10 @@ public class App {
     this.urlControllerMap = ScanControllers.getControllerUrlsMethod();
   }
 
+  public void scanGivers(String basePackage) {
+    this.giverClasses = ScanGivers.findGiverClasses(basePackage);
+  }
+
   public Map<Class<?>, List<Method>> getUrlControllerMap() {
     return urlControllerMap;
   }
@@ -82,7 +88,7 @@ public class App {
   }
 
   public void initWeb() {
-    webFinder = new WebFinder(urlControllerMap);
+    webFinder = new WebFinder(urlControllerMap, giverClasses);
     webMapper = new WebMapper(webFinder);
   }
 
@@ -200,5 +206,4 @@ public class App {
         RouteUtil.class.getName(),
         AttributeUtil.class.getName());
   }
-
 }

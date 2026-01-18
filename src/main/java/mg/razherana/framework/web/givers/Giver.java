@@ -14,12 +14,17 @@ import mg.razherana.framework.web.utils.ModelView;
  * </p>
  * 
  * <p>
- * Givers can be used as a before-middleware, but we should avoid using them as
- * such.
+ * Class that implements this <b>MUST</b> have an empty constructor
  * </p>
  * 
  * <p>
- * Class that implements this <b>MUST</b> have an empty constructor
+ * Giver's methods can be annotated with
+ * {@link mg.razherana.framework.web.givers.annotations.Resolve} to be
+ * dynamically
+ * ran. It must be linked with a
+ * {@link mg.razherana.framework.web.givers.annotations.Impl} annotation on
+ * another method that contains the actual
+ * parameters to be injected.
  * </p>
  */
 public interface Giver {
@@ -33,6 +38,8 @@ public interface Giver {
    * 
    * @throws ServletException If any error occurs about servlet operations.
    */
-  public void init(HttpServletRequest request, HttpServletResponse response, ModelView modelView)
-      throws ServletException;
+  default public void init(HttpServletRequest request, HttpServletResponse response, ModelView modelView)
+      throws ServletException {
+    // Default implementation does nothing
+  }
 }

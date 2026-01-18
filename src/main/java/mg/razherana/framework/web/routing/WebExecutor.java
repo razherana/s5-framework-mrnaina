@@ -7,40 +7,59 @@ import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Map;
 
-import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
-import jakarta.servlet.http.Part;
 import mg.razherana.framework.App;
 import mg.razherana.framework.web.annotations.JsonUrl;
 import mg.razherana.framework.web.annotations.controllers.Prototype;
 import mg.razherana.framework.web.annotations.controllers.Stateful;
-import mg.razherana.framework.web.annotations.parameters.CreateSession;
-import mg.razherana.framework.web.annotations.parameters.ParamBody;
-import mg.razherana.framework.web.annotations.parameters.ParamVar;
-import mg.razherana.framework.web.annotations.parameters.PathVar;
-import mg.razherana.framework.web.annotations.parameters.PathVars;
 import mg.razherana.framework.web.containers.ResponseContainer;
 import mg.razherana.framework.web.containers.WebRouteContainer;
 import mg.razherana.framework.web.exceptions.MalformedWebAnnotationException;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
-import mg.razherana.framework.web.exceptions.http.BadRequestException;
 import mg.razherana.framework.web.givers.Giver;
+import mg.razherana.framework.web.givers.proxies.GiverMethodInterceptor;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
 import mg.razherana.framework.web.middlewares.Middleware;
 import mg.razherana.framework.web.middlewares.annotations.Middlewares;
-import mg.razherana.framework.web.utils.ConversionUtils;
+import mg.razherana.framework.web.routing.argsresolver.ArgResolver;
+import mg.razherana.framework.web.routing.argsresolver.providers.GiverProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.HttpServletRequestProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.HttpServletResponseProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.HttpSessionProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.ModelViewProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.ParamBodyProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.ParamVarProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.PathVarProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.PathVarsProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.RequestBodyProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.ServletContextProvider;
 import mg.razherana.framework.web.utils.ModelView;
 import mg.razherana.framework.web.utils.http.RequestBody;
 import mg.razherana.framework.web.utils.http.ResponseBody;
 import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
-import mg.razherana.framework.web.utils.objectconversion.ConversionObjectUtils;
 
 public class WebExecutor {
+  private static final ArgResolver argResolver = new ArgResolver();
+
+  static {
+    // Register default providers
+    argResolver.registerProvider(new GiverProvider());
+    argResolver.registerProvider(new PathVarProvider());
+    argResolver.registerProvider(new HttpServletRequestProvider());
+    argResolver.registerProvider(new HttpServletResponseProvider());
+    argResolver.registerProvider(new PathVarsProvider());
+    argResolver.registerProvider(new ParamVarProvider());
+    argResolver.registerProvider(new ServletContextProvider());
+    argResolver.registerProvider(new HttpSessionProvider());
+    argResolver.registerProvider(new ModelViewProvider());
+    argResolver.registerProvider(new RequestBodyProvider());
+    argResolver.registerProvider(new ParamBodyProvider());
+  }
+
   public static void sendException(HttpServletRequest request,
       HttpServletResponse response,
       Exception e,
@@ -60,6 +79,39 @@ public class WebExecutor {
     }
   }
 
+  public static Object[] resolveArgs(
+      WebExecutor webExecutor,
+      Method method,
+      Map<String, String> pathParameters,
+      HttpServletRequest request,
+      HttpServletResponse response,
+      RequestBody requestBody,
+      ModelView mv,
+      Map<Class<?>, Giver> givers) throws IOException, ServletException {
+    Parameter[] args = method.getParameters();
+
+    Object[] argInstances = new Object[args.length];
+
+    for (int i = 0; i < args.length; i++) {
+      Parameter arg = args[i];
+      Class<?> argType = arg.getType();
+
+      argInstances[i] = argResolver.resolveArgument(
+          webExecutor,
+          arg,
+          argType,
+          method,
+          pathParameters,
+          request,
+          response,
+          requestBody,
+          mv,
+          givers);
+    }
+
+    return argInstances;
+  }
+
   private WebRouteContainer webRouteContainer;
 
   private Map<String, ResponseHandler> responseHandlerMap;
@@ -73,22 +125,11 @@ public class WebExecutor {
     this.webMapper = webMapper;
   }
 
-  private Object getControllerInstance(HttpServletRequest request) {
-    // Check if the controller is stateful
-    Class<?> controllerClass = webRouteContainer.getControllerClass();
-
-    var stateful = controllerClass.getDeclaredAnnotation(Stateful.class);
-    if (stateful != null) {
-      // Get the session from the request
-      return webMapper.getStatefulInstance(request, webRouteContainer.getControllerContainer());
-    }
-
-    if (controllerClass.isAnnotationPresent(Prototype.class)) {
-      return WebFinder.instanciateController(controllerClass);
-    }
-
-    // Default to singleton instance
-    return webRouteContainer.getControllerInstance();
+  /**
+   * @return the webMapper
+   */
+  public WebMapper getWebMapper() {
+    return webMapper;
   }
 
   public void execute(HttpServletRequest request,
@@ -127,9 +168,9 @@ public class WebExecutor {
     ModelView mv = new ModelView(request, response, requestBody, webRouteContainer);
 
     Map<Class<?>, Middleware> middlewares = initMiddlewares(request, response, mv);
-    Map<Class<?>, Giver> givers = initGivers(request, response, mv);
+    Map<Class<?>, Giver> givers = initGivers(request, response, mv, pathParameters, requestBody);
 
-    Object[] methodArgs = resolveMethodArgs(method, pathParameters,
+    Object[] methodArgs = WebExecutor.resolveArgs(this, method, pathParameters,
         request, response, requestBody, mv, givers);
 
     Object middlewareBeforeResult = null;
@@ -203,6 +244,24 @@ public class WebExecutor {
     return webRouteContainer.getControllerInstance();
   }
 
+  private Object getControllerInstance(HttpServletRequest request) {
+    // Check if the controller is stateful
+    Class<?> controllerClass = webRouteContainer.getControllerClass();
+
+    var stateful = controllerClass.getDeclaredAnnotation(Stateful.class);
+    if (stateful != null) {
+      // Get the session from the request
+      return webMapper.getStatefulInstance(request, webRouteContainer.getControllerContainer());
+    }
+
+    if (controllerClass.isAnnotationPresent(Prototype.class)) {
+      return WebFinder.instanciateController(controllerClass);
+    }
+
+    // Default to singleton instance
+    return webRouteContainer.getControllerInstance();
+  }
+
   private JspFunctionBridge instantiateJspUtils(
       Map<String, Class<? extends JspUtil>> jspUtilMap,
       HttpServletRequest request,
@@ -229,169 +288,8 @@ public class WebExecutor {
     return jspFunctionBridge;
   }
 
-  private Object[] resolveMethodArgs(Method method,
-      Map<String, String> pathParameters,
-      HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody,
-      ModelView mv,
-      Map<Class<?>, Giver> givers) throws IOException, ServletException {
-    Parameter[] args = method.getParameters();
-    Object[] argInstances = new Object[args.length];
-
-    for (int i = 0; i < args.length; i++) {
-      Parameter arg = args[i];
-      Class<?> argType = arg.getType();
-
-      // Check if arg is a Giver
-      if (Giver.class.isAssignableFrom(argType)) {
-        Giver giver = givers.get(argType.asSubclass(Giver.class));
-        if (giver == null) {
-          // Should not happen
-          throw new MalformedWebAnnotationException(
-              "Giver of type " + argType.getName()
-                  + " cannot be provided for method: " + method.getName());
-        }
-        argInstances[i] = giver;
-        continue;
-      }
-
-      // Check if annotated with @PathVar
-      if (arg.isAnnotationPresent(PathVar.class)) {
-        PathVar pathVar = arg.getAnnotation(PathVar.class);
-        String varName = pathVar.value();
-
-        String varValue = pathParameters.get(varName);
-
-        // Convert to appropriate type
-        Object convertedValue = ConversionUtils
-            .convertStringToType(varValue, argType);
-        argInstances[i] = convertedValue;
-        continue;
-      }
-
-      // Check for HttpServletRequest and HttpServletResponse
-      if (argType == HttpServletRequest.class) {
-        argInstances[i] = request;
-        continue;
-      }
-
-      if (argType == HttpServletResponse.class) {
-        argInstances[i] = response;
-        continue;
-      }
-
-      // Check for @PathVars for path parameters
-      if (arg.isAnnotationPresent(PathVars.class)) {
-        // Check if the type is Map<String, String>
-        if (argType == Map.class
-            && arg.getParameterizedType().getTypeName().equals(
-                "java.util.Map<java.lang.String, java.lang.String>")) {
-          argInstances[i] = pathParameters;
-          continue;
-        }
-
-        // If not the correct type, throw an exception
-        throw new MalformedWebAnnotationException(
-            "@PathVars can only be applied to parameters of type Map<String, String> in method: "
-                + method.getName());
-      }
-
-      // Check for @ParamVar
-      if (arg.isAnnotationPresent(ParamVar.class)) {
-        ParamVar paramVar = arg.getAnnotation(ParamVar.class);
-        String varName = paramVar.value();
-
-        Object rawValue = requestBody.get(varName);
-
-        if (rawValue == null) {
-          if (paramVar.required()) {
-            // The request object is being stored as additional data in the exception.
-            throw new BadRequestException("Missing required parameter: " + varName, request);
-          }
-
-          // Use default value if not Part
-          if (!(rawValue instanceof Part))
-            rawValue = paramVar.defaultValue();
-        } else if (paramVar.forceString() && rawValue instanceof String[] values) {
-          rawValue = values.length > 0 ? values[0] : "";
-        }
-
-        try {
-          Object convertedValue = ConversionUtils
-              .convertStringOrArrToType(rawValue, argType, getControllerInstance());
-
-          argInstances[i] = convertedValue;
-        } catch (IllegalArgumentException e) {
-          throw new BadRequestException("Type mismatch for parameter: " + varName, request);
-        }
-        continue;
-      }
-
-      // Check if ServletContext
-      if (argType.equals(ServletContext.class)) {
-        argInstances[i] = request.getServletContext();
-        continue;
-      }
-
-      // Check if HttpSession
-      if (argType.equals(HttpSession.class)) {
-        argInstances[i] = request
-            .getSession(arg.isAnnotationPresent(CreateSession.class));
-        continue;
-      }
-
-      // Check if ModelView
-      if (argType.equals(ModelView.class)) {
-        argInstances[i] = mv;
-        continue;
-      }
-
-      if (argType == RequestBody.class || RequestBody.class.isAssignableFrom(argType)) {
-        argInstances[i] = requestBody;
-        continue;
-      }
-
-      // Check if ParamBody
-      if (arg.isAnnotationPresent(ParamBody.class)) {
-        Map<String, ?> bodyMap = requestBody.asMap();
-
-        if (argType == Map.class
-            && arg.getParameterizedType().getTypeName().equals(
-                "java.util.Map<java.lang.String, java.lang.Object>")) {
-          argInstances[i] = new java.util.HashMap<>(bodyMap);
-          continue;
-        }
-
-        if (argType == JsonElement.class || JsonElement.class.isAssignableFrom(argType)) {
-          var jsonElement = requestBody.getJsonElement().orElse(null);
-
-          if (jsonElement == null) {
-            throw new BadRequestException("Request body is not JSON", request);
-          }
-
-          argInstances[i] = jsonElement;
-          continue;
-        }
-
-        Object convertedObject = ConversionObjectUtils
-            .convertMapToObject(bodyMap, arg.getType(), getControllerInstance());
-
-        argInstances[i] = convertedObject;
-        continue;
-      }
-
-      // Throw exception for unsupported parameter types
-      throw new MalformedWebAnnotationException(
-          "Unsupported parameter type: " + argType.getName()
-              + " in method: " + method.getName());
-
-    }
-
-    return argInstances;
-  }
-
   private Map<Class<?>, Giver> initGivers(HttpServletRequest request, HttpServletResponse response,
-      ModelView mv) throws ServletException {
+      ModelView mv, Map<String, String> pathParameters, RequestBody requestBody) throws ServletException {
     Map<Class<?>, Giver> givers = new HashMap<>();
 
     Method method = getWebRouteContainer().getMethod();
@@ -402,24 +300,15 @@ public class WebExecutor {
       Class<?> paramType = parameter.getType();
 
       if (Giver.class.isAssignableFrom(paramType)) {
-        Constructor<?> constructor;
-        try {
-          constructor = paramType.getDeclaredConstructor();
-        } catch (NoSuchMethodException e) {
-          throw new MalformedWebAnnotationException(
-              "Giver class " + paramType.getName()
-                  + " must have a constructor with no parameters");
-        }
+        Giver giverInstance = GiverMethodInterceptor.getGiverInstance(paramType,
+            this,
+            pathParameters,
+            request,
+            response,
+            requestBody,
+            mv,
+            givers);
 
-        Giver giverInstance;
-        try {
-          giverInstance = (Giver) constructor.newInstance();
-        } catch (Exception e) {
-          throw new WebExecutionException(
-              "Error instantiating giver: " + paramType.getName(), e);
-        }
-
-        // Initialize the giver
         giverInstance.init(request, response, mv);
 
         givers.put(paramType, giverInstance);
