@@ -7,9 +7,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
 import jakarta.servlet.ServletContext;
 import mg.razherana.framework.scanners.ScanControllers;
+import mg.razherana.framework.scanners.ScanResolvs;
+import mg.razherana.framework.security.auth.middlewares.Authenticated;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
+import mg.razherana.framework.web.givers.Giver;
 import mg.razherana.framework.web.handlers.responses.ErrorResponseHandler;
 import mg.razherana.framework.web.handlers.responses.JspViewResponseHandler;
 import mg.razherana.framework.web.handlers.responses.RedirectResponseHandler;
@@ -22,11 +27,15 @@ import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.defaults.AttributeUtil;
 import mg.razherana.framework.web.utils.jsp.defaults.RouteUtil;
 import mg.razherana.framework.web.utils.jsp.preprocessor.ManualJSPPreprocessor;
+import mg.razherana.framework.web.utils.proxies.MotherResolv;
 
 /**
  * Contains all core infos for the framework
  */
 public class App {
+
+  public static final Set<Class<?>> FRAMEWORK_LOADED_RESOLV_CLASSES = Set.of(
+      Authenticated.class);
 
   public static enum InitKey {
     BASE_PACKAGE("basePackage"),
@@ -50,6 +59,7 @@ public class App {
   private WebFinder webFinder;
   private WebMapper webMapper;
   private final Map<String, ResponseHandler> responseHandlerMap = new HashMap<>();
+  private List<Class<?>>[] resolvClasses;
 
   public App(List<Class<?>> controllerClasses, Map<Class<?>, List<Method>> urlControllerMap) {
     this.controllerClasses = controllerClasses;
@@ -73,6 +83,13 @@ public class App {
     this.urlControllerMap = ScanControllers.getControllerUrlsMethod();
   }
 
+  public void scanGivers(String basePackage) {
+    this.resolvClasses = ScanResolvs.findResolvClasses(basePackage, new Class<?>[] {
+        Giver.class,
+        MotherResolv.class
+    });
+  }
+
   public Map<Class<?>, List<Method>> getUrlControllerMap() {
     return urlControllerMap;
   }
@@ -82,7 +99,10 @@ public class App {
   }
 
   public void initWeb() {
-    webFinder = new WebFinder(urlControllerMap);
+    webFinder = new WebFinder(urlControllerMap, resolvClasses, new Class<?>[] {
+        Giver.class,
+        MotherResolv.class
+    });
     webMapper = new WebMapper(webFinder);
   }
 
@@ -200,5 +220,4 @@ public class App {
         RouteUtil.class.getName(),
         AttributeUtil.class.getName());
   }
-
 }

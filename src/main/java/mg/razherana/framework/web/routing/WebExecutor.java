@@ -3,39 +3,71 @@ package mg.razherana.framework.web.routing;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
-import jakarta.servlet.http.Part;
 import mg.razherana.framework.App;
 import mg.razherana.framework.web.annotations.JsonUrl;
 import mg.razherana.framework.web.annotations.controllers.Prototype;
 import mg.razherana.framework.web.annotations.controllers.Stateful;
-import mg.razherana.framework.web.annotations.parameters.CreateSession;
-import mg.razherana.framework.web.annotations.parameters.ParamBody;
-import mg.razherana.framework.web.annotations.parameters.ParamVar;
-import mg.razherana.framework.web.annotations.parameters.PathVar;
-import mg.razherana.framework.web.annotations.parameters.PathVars;
 import mg.razherana.framework.web.containers.ResponseContainer;
 import mg.razherana.framework.web.containers.WebRouteContainer;
-import mg.razherana.framework.web.exceptions.MalformedWebAnnotationException;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
-import mg.razherana.framework.web.exceptions.http.BadRequestException;
+import mg.razherana.framework.web.givers.Giver;
 import mg.razherana.framework.web.handlers.responses.ResponseHandler;
-import mg.razherana.framework.web.utils.ConversionUtils;
+import mg.razherana.framework.web.middlewares.Middleware;
+import mg.razherana.framework.web.middlewares.annotations.Middlewares;
+import mg.razherana.framework.web.routing.argsresolver.ArgResolver;
+import mg.razherana.framework.web.routing.argsresolver.providers.AnnotationProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.GiverProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.HttpServletRequestProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.HttpServletResponseProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.HttpSessionProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.MethodProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.ModelViewProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.ParamBodyProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.ParamVarProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.PathVarProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.PathVarsProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.RequestBodyProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.ServletContextProvider;
 import mg.razherana.framework.web.utils.ModelView;
+import mg.razherana.framework.web.utils.ReflectUtils;
 import mg.razherana.framework.web.utils.http.RequestBody;
 import mg.razherana.framework.web.utils.http.ResponseBody;
 import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
-import mg.razherana.framework.web.utils.objectconversion.ConversionObjectUtils;
+import mg.razherana.framework.web.utils.proxies.MethodInterceptor;
 
 public class WebExecutor {
+  private static final ArgResolver argResolver = new ArgResolver();
+
+  static {
+    // Register default providers
+    argResolver.registerProvider(new GiverProvider());
+    argResolver.registerProvider(new PathVarProvider());
+    argResolver.registerProvider(new HttpServletRequestProvider());
+    argResolver.registerProvider(new HttpServletResponseProvider());
+    argResolver.registerProvider(new PathVarsProvider());
+    argResolver.registerProvider(new ParamVarProvider());
+    argResolver.registerProvider(new ServletContextProvider());
+    argResolver.registerProvider(new HttpSessionProvider());
+    argResolver.registerProvider(new ModelViewProvider());
+    argResolver.registerProvider(new RequestBodyProvider());
+    argResolver.registerProvider(new ParamBodyProvider());
+    argResolver.registerProvider(new MethodProvider());
+    argResolver.registerProvider(new AnnotationProvider());
+  }
+
   public static void sendException(HttpServletRequest request,
       HttpServletResponse response,
       Exception e,
@@ -55,6 +87,39 @@ public class WebExecutor {
     }
   }
 
+  public static Object[] resolveArgs(
+      WebExecutor webExecutor,
+      Method method,
+      Map<String, String> pathParameters,
+      HttpServletRequest request,
+      HttpServletResponse response,
+      RequestBody requestBody,
+      ModelView mv,
+      Map<Class<?>, Giver> givers) throws IOException, ServletException {
+    Parameter[] args = method.getParameters();
+
+    Object[] argInstances = new Object[args.length];
+
+    for (int i = 0; i < args.length; i++) {
+      Parameter arg = args[i];
+      Class<?> argType = arg.getType();
+
+      argInstances[i] = argResolver.resolveArgument(
+          webExecutor,
+          arg,
+          argType,
+          method,
+          pathParameters,
+          request,
+          response,
+          requestBody,
+          mv,
+          givers);
+    }
+
+    return argInstances;
+  }
+
   private WebRouteContainer webRouteContainer;
 
   private Map<String, ResponseHandler> responseHandlerMap;
@@ -68,22 +133,11 @@ public class WebExecutor {
     this.webMapper = webMapper;
   }
 
-  private Object getControllerInstance(HttpServletRequest request) {
-    // Check if the controller is stateful
-    Class<?> controllerClass = webRouteContainer.getControllerClass();
-
-    var stateful = controllerClass.getDeclaredAnnotation(Stateful.class);
-    if (stateful != null) {
-      // Get the session from the request
-      return webMapper.getStatefulInstance(request, webRouteContainer.getControllerContainer());
-    }
-
-    if (controllerClass.isAnnotationPresent(Prototype.class)) {
-      return WebFinder.instanciateController(controllerClass);
-    }
-
-    // Default to singleton instance
-    return webRouteContainer.getControllerInstance();
+  /**
+   * @return the webMapper
+   */
+  public WebMapper getWebMapper() {
+    return webMapper;
   }
 
   public void execute(HttpServletRequest request,
@@ -119,18 +173,54 @@ public class WebExecutor {
     RequestBody requestBody = RequestBody.from(request);
     request.setAttribute("requestBody", requestBody);
 
-    Object[] methodArgs = resolveMethodArgs(method, pathParameters,
-        request, response, requestBody);
+    ModelView mv = new ModelView(request, response, requestBody, webRouteContainer);
 
+    Map<Class<?>, Giver> givers = new HashMap<>();
+
+    Map<Class<?>, Middleware> middlewares = initMiddlewares(request, response, mv, pathParameters, requestBody, givers);
+
+    initGivers(givers, middlewares, method.getParameters(), request, response, mv, pathParameters,
+        requestBody);
+
+    System.out.println("[Fruits] : Givers initialized: " + givers.keySet().stream()
+        .map(Class::getName).reduce((a, b) -> a + ", " + b).orElse("none"));
+
+    Object[] methodArgs = WebExecutor.resolveArgs(this, method, pathParameters,
+        request, response, requestBody, mv, givers);
+
+    Object middlewareBeforeResult = null;
+
+    // Execute middlewares before method execution
+    for (Middleware middleware : middlewares.values()) {
+      Object beforeResult = middleware.before();
+      middlewareBeforeResult = beforeResult;
+
+      if (middlewareBeforeResult != null)
+        break;
+    }
+
+    Object responseObject = null;
     ResponseContainer rc = null;
 
     try {
-      Object responseObject = method.invoke(controllerInstance, methodArgs);
+      if (middlewareBeforeResult != null) {
+        responseObject = middlewareBeforeResult;
+      } else {
+        responseObject = method.invoke(controllerInstance, methodArgs);
+
+        // Execute middlewares after method execution
+        for (Middleware middleware : middlewares.values()) {
+          Object afterResult = middleware.after();
+          if (afterResult != null) {
+            responseObject = afterResult;
+            break;
+          }
+        }
+      }
 
       if (method.isAnnotationPresent(JsonUrl.class)) {
         rc = new ResponseContainer(responseObject, "json");
       } else if (responseObject instanceof String) {
-        ModelView mv = new ModelView(request, response, requestBody);
         rc = mv.write((String) responseObject);
       } else if (responseObject instanceof ResponseContainer) {
         rc = (ResponseContainer) responseObject;
@@ -169,6 +259,24 @@ public class WebExecutor {
     return webRouteContainer.getControllerInstance();
   }
 
+  private Object getControllerInstance(HttpServletRequest request) {
+    // Check if the controller is stateful
+    Class<?> controllerClass = webRouteContainer.getControllerClass();
+
+    var stateful = controllerClass.getDeclaredAnnotation(Stateful.class);
+    if (stateful != null) {
+      // Get the session from the request
+      return webMapper.getStatefulInstance(request, webRouteContainer.getControllerContainer());
+    }
+
+    if (controllerClass.isAnnotationPresent(Prototype.class)) {
+      return WebFinder.instanciateController(controllerClass);
+    }
+
+    // Default to singleton instance
+    return webRouteContainer.getControllerInstance();
+  }
+
   private JspFunctionBridge instantiateJspUtils(
       Map<String, Class<? extends JspUtil>> jspUtilMap,
       HttpServletRequest request,
@@ -195,149 +303,150 @@ public class WebExecutor {
     return jspFunctionBridge;
   }
 
-  private Object[] resolveMethodArgs(Method method,
-      Map<String, String> pathParameters,
-      HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody) throws IOException, ServletException {
-    Parameter[] args = method.getParameters();
-    Object[] argInstances = new Object[args.length];
+  private Map<Class<?>, Giver> initGivers(Iterable<Class<?>> resolvClasses, HttpServletRequest request,
+      HttpServletResponse response,
+      ModelView mv, Map<String, String> pathParameters, RequestBody requestBody) throws ServletException {
+    Map<Class<?>, Giver> givers = new HashMap<>();
+    var keySet = getWebMapper().getWebFinder().getResolvContainers().keySet();
 
-    for (int i = 0; i < args.length; i++) {
-      Parameter arg = args[i];
-      Class<?> argType = arg.getType();
+    for (Class<?> resolvClass : resolvClasses) {
 
-      // Check if annotated with @PathVar
-      if (arg.isAnnotationPresent(PathVar.class)) {
-        PathVar pathVar = arg.getAnnotation(PathVar.class);
-        String varName = pathVar.value();
+      if (Giver.class.isAssignableFrom(resolvClass)) {
+        // Get the youngest child class from the givers map
+        Class<?> youngestChildClass = ReflectUtils.getYoungestChildClass(resolvClass,
+            keySet);
 
-        String varValue = pathParameters.get(varName);
+        System.out.println("[Fruits/InitGivers] : For parameter of type " + resolvClass.getName()
+            + ", youngest child class is "
+            + (youngestChildClass != null ? youngestChildClass.getName()
+                : "null. Givers available: "
+                    + keySet.stream()
+                        .map(Class::getName).reduce((a, b) -> a + ", " + b).orElse("none")));
 
-        // Convert to appropriate type
-        Object convertedValue = ConversionUtils
-            .convertStringToType(varValue, argType);
-        argInstances[i] = convertedValue;
-        continue;
-      }
-
-      // Check for HttpServletRequest and HttpServletResponse
-      if (argType == HttpServletRequest.class) {
-        argInstances[i] = request;
-        continue;
-      }
-
-      if (argType == HttpServletResponse.class) {
-        argInstances[i] = response;
-        continue;
-      }
-
-      // Check for @PathVars for path parameters
-      if (arg.isAnnotationPresent(PathVars.class)) {
-        // Check if the type is Map<String, String>
-        if (argType == Map.class
-            && arg.getParameterizedType().getTypeName().equals(
-                "java.util.Map<java.lang.String, java.lang.String>")) {
-          argInstances[i] = pathParameters;
+        if (givers.containsKey(youngestChildClass))
           continue;
-        }
 
-        // If not the correct type, throw an exception
-        throw new MalformedWebAnnotationException(
-            "@PathVars can only be applied to parameters of type Map<String, String> in method: "
-                + method.getName());
+        Giver giverInstance = (Giver) MethodInterceptor.getInstance(
+            youngestChildClass,
+            Giver.class,
+            this,
+            pathParameters,
+            request,
+            response,
+            requestBody,
+            mv,
+            givers);
+
+        giverInstance.init(request, response, mv);
+
+        givers.put(youngestChildClass, giverInstance);
       }
-
-      // Check for @ParamVar
-      if (arg.isAnnotationPresent(ParamVar.class)) {
-        ParamVar paramVar = arg.getAnnotation(ParamVar.class);
-        String varName = paramVar.value();
-
-        Object rawValue = requestBody.get(varName);
-
-        if (rawValue == null) {
-          if (paramVar.required()) {
-            // The request object is being stored as additional data in the exception.
-            throw new BadRequestException("Missing required parameter: " + varName, request);
-          }
-
-          // Use default value if not Part
-          if (!(rawValue instanceof Part))
-            rawValue = paramVar.defaultValue();
-        } else if (paramVar.forceString() && rawValue instanceof String[] values) {
-          rawValue = values.length > 0 ? values[0] : "";
-        }
-
-        try {
-          Object convertedValue = ConversionUtils
-              .convertStringOrArrToType(rawValue, argType, getControllerInstance());
-
-          argInstances[i] = convertedValue;
-        } catch (IllegalArgumentException e) {
-          throw new BadRequestException("Type mismatch for parameter: " + varName, request);
-        }
-        continue;
-      }
-
-      // Check if ServletContext
-      if (argType.equals(ServletContext.class)) {
-        argInstances[i] = request.getServletContext();
-        continue;
-      }
-
-      // Check if HttpSession
-      if (argType.equals(HttpSession.class)) {
-        argInstances[i] = request
-            .getSession(arg.isAnnotationPresent(CreateSession.class));
-        continue;
-      }
-
-      // Check if ModelView
-      if (argType.equals(ModelView.class)) {
-        argInstances[i] = new ModelView(request, response, requestBody, webRouteContainer);
-        continue;
-      }
-
-      if (argType == RequestBody.class || RequestBody.class.isAssignableFrom(argType)) {
-        argInstances[i] = requestBody;
-        continue;
-      }
-
-      // Check if ParamBody
-      if (arg.isAnnotationPresent(ParamBody.class)) {
-        Map<String, ?> bodyMap = requestBody.asMap();
-
-        if (argType == Map.class
-            && arg.getParameterizedType().getTypeName().equals(
-                "java.util.Map<java.lang.String, java.lang.Object>")) {
-          argInstances[i] = new java.util.HashMap<>(bodyMap);
-          continue;
-        }
-
-        if (argType == JsonElement.class || JsonElement.class.isAssignableFrom(argType)) {
-          var jsonElement = requestBody.getJsonElement().orElse(null);
-
-          if (jsonElement == null) {
-            throw new BadRequestException("Request body is not JSON", request);
-          }
-
-          argInstances[i] = jsonElement;
-          continue;
-        }
-
-        Object convertedObject = ConversionObjectUtils
-            .convertMapToObject(bodyMap, arg.getType(), getControllerInstance());
-
-        argInstances[i] = convertedObject;
-        continue;
-      }
-
-      // Throw exception for unsupported parameter types
-      throw new MalformedWebAnnotationException(
-          "Unsupported parameter type: " + argType.getName()
-              + " in method: " + method.getName());
-
     }
 
-    return argInstances;
+    return givers;
+  }
+
+  private Map<Class<?>, Giver> initGivers(Map<Class<?>, Giver> givers, Map<Class<?>, Middleware> middlewares,
+      Parameter[] parameters,
+      HttpServletRequest request,
+      HttpServletResponse response,
+      ModelView mv, Map<String, String> pathParameters, RequestBody requestBody) throws ServletException {
+    List<Class<?>> resolvClasses = new ArrayList<>();
+
+    var resolvClassesSet = getWebMapper().getWebFinder().getResolvContainers().keySet();
+
+    // First loop is the controller's parameters
+    for (Parameter parameter : parameters)
+      if (Giver.class.isAssignableFrom(parameter.getType()) && parameter.getType() != Giver.class) {
+        Class<?> youngestChildClass = ReflectUtils.getYoungestChildClass(parameter.getType(),
+            resolvClassesSet);
+
+        resolvClasses.add(youngestChildClass);
+      }
+
+    // Add middlewares' givers
+    for (Class<?> middlewareClass : middlewares.keySet()) {
+      resolvClasses.add(middlewareClass);
+    }
+
+    // Third loop is all methods of givers found until now
+    var resolvContainers = getWebMapper().getWebFinder().getResolvContainers();
+
+    for (int i = 0; i < resolvClasses.size(); i++) {
+      Class<?> clazz = resolvClasses.get(i);
+
+      System.out.println("[Fruits] : Inspecting resolv class => " + clazz);
+
+      // Get the youngest child class from the givers map
+      Class<?> youngestChildClass = ReflectUtils.getYoungestChildClass(clazz,
+          resolvClassesSet);
+
+      var resolvContainerList = resolvContainers.get(youngestChildClass);
+
+      if (resolvContainerList == null) {
+        System.out.println("[Fruits] : Did not found resolvContainerList in " + youngestChildClass);
+        continue;
+      }
+
+      for (var container : resolvContainerList) {
+        var parametersOfImpl = container.getImplMethod().getParameters();
+
+        for (Parameter parameter : parametersOfImpl)
+          if (Giver.class.isAssignableFrom(parameter.getType()) && parameter.getType() != Giver.class)
+            if (!resolvClasses.contains(parameter.getType()))
+              resolvClasses.add(parameter.getType());
+      }
+    }
+
+    System.out.println("[Fruits] : All resolv classes before filtering: " + resolvClasses);
+
+    resolvClasses.removeIf((clazz) -> !Giver.class.isAssignableFrom(clazz));
+
+    System.out.println("[Fruits] : All resolv classes after filtering: " + resolvClasses);
+
+    givers.putAll(initGivers(resolvClasses, request, response, mv, pathParameters, requestBody));
+
+    return givers;
+  }
+
+  private Map<Class<?>, Middleware> initMiddlewares(HttpServletRequest request, HttpServletResponse response,
+      ModelView mv, Map<String, String> pathParameters, RequestBody requestBody, Map<Class<?>, Giver> givers) {
+    Map<Class<?>, Middleware> middlewares = new HashMap<>();
+
+    Class<?> controllerClass = getWebRouteContainer().getControllerClass();
+
+    // Get all middlewares for this controller
+    Middlewares middlewaresAnnot = controllerClass.getAnnotation(Middlewares.class);
+
+    // Get all middlewares for this method
+    Method method = getWebRouteContainer().getMethod();
+    Middlewares methodMiddlewaresAnnot = method.getAnnotation(Middlewares.class);
+
+    Set<Class<?>> middlewareClasses = new HashSet<>();
+
+    if (middlewaresAnnot != null) {
+      middlewareClasses = new HashSet<>(Arrays.asList(middlewaresAnnot.value()));
+    }
+
+    if (methodMiddlewaresAnnot != null) {
+      middlewareClasses.addAll(Arrays.asList(methodMiddlewaresAnnot.value()));
+    }
+
+    for (Class<?> middlewareClass : middlewareClasses) {
+      Middleware middlewareInstance = (Middleware) MethodInterceptor.getInstance(
+          middlewareClass,
+          Middleware.class,
+          this,
+          pathParameters,
+          request,
+          response,
+          requestBody,
+          mv,
+          givers);
+
+      middlewares.put(middlewareClass, middlewareInstance);
+    }
+
+    return middlewares;
   }
 }
