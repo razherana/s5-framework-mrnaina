@@ -3,6 +3,7 @@ package mg.razherana.framework.web.utils;
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -180,6 +181,16 @@ public class ConversionUtils {
 
       try {
         o = LocalDateTime.parse(value);
+      } catch (Exception e) {
+        o = null;
+      }
+
+      return targetType.cast(o);
+    } else if (targetType == Timestamp.class) {
+      Object o;
+
+      try {
+        o = Timestamp.valueOf(value);
       } catch (Exception e) {
         o = null;
       }
