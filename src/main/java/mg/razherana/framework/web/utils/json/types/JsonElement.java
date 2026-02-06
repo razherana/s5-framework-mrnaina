@@ -1,6 +1,7 @@
 package mg.razherana.framework.web.utils.json.types;
 
 import java.lang.reflect.Array;
+import java.util.stream.StreamSupport;
 
 import mg.razherana.framework.web.utils.json.JsonObjectBuilder;
 import mg.razherana.framework.web.utils.json.JsonParser;
@@ -20,8 +21,8 @@ public abstract class JsonElement {
     if (value instanceof JsonElement)
       return (JsonElement) value;
 
-    if (value instanceof String)
-      return new JsonString((String) value);
+    if (JsonString.shouldBeString(value))
+      return new JsonString(String.valueOf(value));
 
     if (value instanceof Boolean)
       return new JsonBoolean((Boolean) value);
@@ -32,8 +33,8 @@ public abstract class JsonElement {
     if (value instanceof java.util.Map)
       return new JsonObject((java.util.Map<?, ?>) value);
 
-    if (value instanceof java.util.List)
-      return new JsonArray((java.util.List<?>) value);
+    if (value instanceof Iterable)
+      return new JsonArray(StreamSupport.stream(((Iterable<?>) value).spliterator(), false).toList());
 
     if (value.getClass().isArray()) {
       int len = Array.getLength(value);

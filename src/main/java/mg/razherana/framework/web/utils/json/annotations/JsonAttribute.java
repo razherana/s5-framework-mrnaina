@@ -11,4 +11,6 @@ public @interface JsonAttribute {
   String value() default "";
 
   boolean ignore() default false;
+
+  boolean forceString() default false;
 }

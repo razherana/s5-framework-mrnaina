@@ -30,6 +30,9 @@ public class JsonObjectBuilder {
         if (jsonAttribute != null && !jsonAttribute.value().isEmpty())
           name = jsonAttribute.value();
 
+        if (jsonAttribute != null && jsonAttribute.forceString() && value != null)
+          value = String.valueOf(value);
+
         jsonObject.add(name, JsonElement.of(value));
       }
     } catch (IllegalAccessException e) {
