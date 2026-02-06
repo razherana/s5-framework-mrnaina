@@ -192,7 +192,13 @@ public class ConversionUtils {
       try {
         o = Timestamp.valueOf(value);
       } catch (Exception e) {
-        o = null;
+        // Try parsing as LocalDateTime and convert to Timestamp
+        try {
+          LocalDateTime localDateTime = LocalDateTime.parse(value);
+          o = Timestamp.valueOf(localDateTime);
+        } catch (Exception ex) {
+          o = null;
+        }
       }
 
       return targetType.cast(o);
