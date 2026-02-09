@@ -27,6 +27,7 @@ import mg.razherana.framework.web.middlewares.Middleware;
 import mg.razherana.framework.web.middlewares.annotations.Middlewares;
 import mg.razherana.framework.web.routing.argsresolver.ArgResolver;
 import mg.razherana.framework.web.routing.argsresolver.providers.AnnotationProvider;
+import mg.razherana.framework.web.routing.argsresolver.providers.ContextParamProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.GiverProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.HttpServletRequestProvider;
 import mg.razherana.framework.web.routing.argsresolver.providers.HttpServletResponseProvider;
@@ -66,6 +67,7 @@ public class WebExecutor {
     argResolver.registerProvider(new ParamBodyProvider());
     argResolver.registerProvider(new MethodProvider());
     argResolver.registerProvider(new AnnotationProvider());
+    argResolver.registerProvider(new ContextParamProvider());
   }
 
   public static void sendException(HttpServletRequest request,
