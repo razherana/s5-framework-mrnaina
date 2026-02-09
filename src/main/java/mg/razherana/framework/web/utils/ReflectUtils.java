@@ -43,4 +43,13 @@ public class ReflectUtils {
 
     return youngestChild;
   }
+
+  public static Throwable extractRootCause(Throwable throwable) {
+    Throwable rootCause = throwable;
+
+    while (rootCause.getCause() != null)
+      rootCause = rootCause.getCause();
+
+    return rootCause;
+  }
 }

@@ -3,11 +3,11 @@ package mg.razherana.framework.web.handlers.responses;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import mg.razherana.framework.web.containers.ResponseContainer;
 import mg.razherana.framework.web.exceptions.http.HttpException;
+import mg.razherana.framework.web.utils.ReflectUtils;
 
 public class ErrorResponseHandler implements ResponseHandler {
 
@@ -16,8 +16,7 @@ public class ErrorResponseHandler implements ResponseHandler {
       throws Exception {
     Exception e = (Exception) rc.getReturnObject();
 
-    if (e instanceof HttpException) {
-      HttpException httpEx = (HttpException) e;
+    if (((Exception) ReflectUtils.extractRootCause(e)) instanceof HttpException httpEx) {
       response.sendError(httpEx.getStatusCode(), httpEx.getMessage());
       return;
     }
@@ -125,30 +124,6 @@ public class ErrorResponseHandler implements ResponseHandler {
   }
 
   private Throwable extractJasperRootCause(Exception e) {
-    if (e == null) {
-      return null;
-    }
-
-    boolean isJasperException = "JasperException".equals(e.getClass().getSimpleName())
-        || "org.apache.jasper.JasperException".equals(e.getClass().getName());
-
-    if (isJasperException) {
-      return e.getCause();
-    }
-
-    if (e instanceof ServletException) {
-      ServletException servletException = (ServletException) e;
-      Throwable rootCause = servletException.getRootCause();
-      if (rootCause != null && rootCause != e) {
-        return rootCause;
-      }
-    }
-
-    Throwable cause = e.getCause();
-    if (cause != null && cause != e) {
-      return cause;
-    }
-
-    return e;
+    return ReflectUtils.extractRootCause(e);
   }
 }
