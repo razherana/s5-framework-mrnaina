@@ -435,7 +435,7 @@ public class WebExecutor {
         GLOBAL_MIDDLEWARES);
 
     if (middlewaresAnnot != null) {
-      middlewareClasses = new HashSet<>(Arrays.asList(middlewaresAnnot.value()));
+      middlewareClasses.addAll(Arrays.asList(middlewaresAnnot.value()));
     }
 
     if (methodMiddlewaresAnnot != null) {
