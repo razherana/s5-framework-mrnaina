@@ -20,7 +20,8 @@ public class GiverProvider implements ArgProvider {
       WebExecutor executor,
       Parameter arg, Class<?> argType, Method method, Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response, RequestBody requestBody, ModelView mv,
-      Map<Class<?>, Giver> givers) {
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return Giver.class.isAssignableFrom(argType);
   }
 
@@ -29,7 +30,8 @@ public class GiverProvider implements ArgProvider {
       WebExecutor executor,
       Parameter arg, Class<?> argType, Method method, Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response, RequestBody requestBody, ModelView mv,
-      Map<Class<?>, Giver> givers) {
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     // Find the giver instance from the givers map
 
     Class<?> youngestChildClass = ReflectUtils.getYoungestChildClass(argType, givers.keySet());

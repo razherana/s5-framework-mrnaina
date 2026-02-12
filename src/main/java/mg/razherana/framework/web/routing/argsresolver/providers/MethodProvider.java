@@ -16,14 +16,16 @@ public class MethodProvider implements ArgProvider {
   @Override
   public boolean supports(WebExecutor executor, Parameter arg, Class<?> argType, Method method,
       Map<String, String> pathParameters, HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers) {
+      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return Method.class.equals(argType);
   }
 
   @Override
   public Object provide(WebExecutor executor, Parameter arg, Class<?> argType, Method method,
       Map<String, String> pathParameters, HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers) {
+      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return method;
   }
 }

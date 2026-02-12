@@ -217,6 +217,19 @@ public class ModelView {
       part.write(path);
   }
 
+  /**
+   * Flash an attribute for the next request. 
+   * The attribute will be removed from the session after being accessed in the next request.
+   * 
+   * @param name
+   * @param value
+   */
+  public void flash(String name, Object value) {
+    request.getSession(true).setAttribute(name, value);
+  }
+
+  
+
   public HttpServletRequest getRequest() {
     return request;
   }

@@ -26,9 +26,16 @@ public class ArgResolver {
       Parameter arg, Class<?> argType, Method method,
       Map<String, String> pathParameters, HttpServletRequest request, HttpServletResponse response,
       RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers) {
+    return resolveArgument(executor, arg, argType, method, pathParameters, request, response, requestBody, mv, givers, new java.util.HashMap<>());
+  }
+
+  public Object resolveArgument(WebExecutor executor,
+      Parameter arg, Class<?> argType, Method method,
+      Map<String, String> pathParameters, HttpServletRequest request, HttpServletResponse response,
+      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers, Map<String, Object> additionalContext) {
     for (ArgProvider provider : providers) {
-      if (provider.supports(executor, arg, argType, method, pathParameters, request, response, requestBody, mv, givers)) {
-        return provider.provide(executor, arg, argType, method, pathParameters, request, response, requestBody, mv, givers);
+      if (provider.supports(executor, arg, argType, method, pathParameters, request, response, requestBody, mv, givers, additionalContext)) {
+        return provider.provide(executor, arg, argType, method, pathParameters, request, response, requestBody, mv, givers, additionalContext);
       }
     }
 

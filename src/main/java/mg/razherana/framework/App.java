@@ -10,7 +10,9 @@ import java.util.Map;
 import java.util.Set;
 
 import jakarta.servlet.ServletContext;
+import mg.razherana.framework.configs.AppConfigLoader;
 import mg.razherana.framework.scanners.ScanControllers;
+import mg.razherana.framework.scanners.ScanConfigs;
 import mg.razherana.framework.scanners.ScanResolvs;
 import mg.razherana.framework.security.auth.middlewares.Authenticated;
 import mg.razherana.framework.web.exceptions.WebExecutionException;
@@ -60,6 +62,7 @@ public class App {
   private WebMapper webMapper;
   private final Map<String, ResponseHandler> responseHandlerMap = new HashMap<>();
   private List<Class<?>>[] resolvClasses;
+  private Map<String, Object> configs = new HashMap<>();
 
   public App(List<Class<?>> controllerClasses, Map<Class<?>, List<Method>> urlControllerMap) {
     this.controllerClasses = controllerClasses;
@@ -90,6 +93,20 @@ public class App {
     });
   }
 
+  public void scanConfigs(String basePackage, ServletContext servletContext) {
+    // Load init parameters from servlet context
+    servletContext.getInitParameterNames().asIterator().forEachRemaining(paramName -> {
+      String paramValue = servletContext.getInitParameter(paramName);
+      if (paramValue != null) {
+        servletContext.setAttribute(paramName, paramValue);
+      }
+    });
+
+    // Scan for config classes and load configs
+    List<Class<?>> configClasses = ScanConfigs.findConfigClasses(basePackage);
+    this.configs = AppConfigLoader.loadConfigs(servletContext, configClasses);
+  }
+
   public Map<Class<?>, List<Method>> getUrlControllerMap() {
     return urlControllerMap;
   }
@@ -106,6 +123,10 @@ public class App {
     webMapper = new WebMapper(webFinder);
   }
 
+  public Map<String, Object> getConfigs() {
+    return configs;
+  }
+
   public Map<String, ResponseHandler> getResponseHandlerMap() {
     return responseHandlerMap;
   }
@@ -120,7 +141,7 @@ public class App {
 
     // Set the custom ones
     try {
-      String classNamesStr = servletContext.getInitParameter(InitKey.RESPONSE_HANDLERS.getKey());
+      String classNamesStr = (String) servletContext.getAttribute(InitKey.RESPONSE_HANDLERS.getKey());
 
       if (classNamesStr == null)
         return;
@@ -155,14 +176,14 @@ public class App {
   }
 
   public void initJspUtils(ServletContext servletContext) {
-    String viewsDirectory = servletContext.getInitParameter(InitKey.VIEWS_DIRECTORY.getKey());
+    String viewsDirectory = (String) servletContext.getAttribute(InitKey.VIEWS_DIRECTORY.getKey());
 
     if (viewsDirectory == null || viewsDirectory.isEmpty()) {
       System.out.println("[Fruits] : No views directory specified. Using default '/WEB-INF/views'");
       viewsDirectory = "/WEB-INF/views";
     }
 
-    String jspUtilsConfig = servletContext.getInitParameter(InitKey.JSP_UTILS.getKey());
+    String jspUtilsConfig = (String) servletContext.getAttribute(InitKey.JSP_UTILS.getKey());
 
     JspFunctionBridge.registerJspUtil(defaultJspUtilMappings(), parseJspUtilConfiguration(jspUtilsConfig),
         servletContext);
@@ -176,7 +197,7 @@ public class App {
   }
 
   public void destroy(ServletContext servletContext) {
-    String viewsDirectory = servletContext.getInitParameter(InitKey.VIEWS_DIRECTORY.getKey());
+    String viewsDirectory = (String) servletContext.getAttribute(InitKey.VIEWS_DIRECTORY.getKey());
 
     if (viewsDirectory == null || viewsDirectory.isEmpty()) {
       System.out.println("[Fruits] : No views directory specified. Using default '/WEB-INF/views'");
@@ -184,7 +205,7 @@ public class App {
     }
 
     try {
-      if (new File(viewsDirectory).exists())
+      if (new File(servletContext.getRealPath(viewsDirectory)).exists())
         ManualJSPPreprocessor.restoreBackups(servletContext.getRealPath(viewsDirectory));
     } catch (IOException e) {
       e.printStackTrace();

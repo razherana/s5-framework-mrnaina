@@ -17,7 +17,8 @@ public class AnnotationProvider implements ArgProvider {
   @Override
   public boolean supports(WebExecutor executor, Parameter arg, Class<?> argType, Method method,
       Map<String, String> pathParameters, HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers) {
+      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return Annotation.class.isAssignableFrom(argType);
   }
 
@@ -25,7 +26,8 @@ public class AnnotationProvider implements ArgProvider {
   @Override
   public Object provide(WebExecutor executor, Parameter arg, Class<?> argType, Method method,
       Map<String, String> pathParameters, HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers) {
+      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return arg.getAnnotation((Class<? extends Annotation>) argType);
   }
 }

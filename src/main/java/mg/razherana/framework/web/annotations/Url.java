@@ -10,14 +10,15 @@ import mg.razherana.framework.web.containers.RoutingContainer.HttpMethod;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Url {
-  String value();
+  String value() default "/";
 
   /**
    * Alias for the route.
    * If not set, the name of the method lowercased will be used as alias.
+   * 
    * @return
    */
   String alias() default "";
-  
+
   HttpMethod[] method() default HttpMethod.GET;
 }

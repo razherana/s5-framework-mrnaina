@@ -18,7 +18,8 @@ public class HttpServletResponseProvider implements ArgProvider {
       WebExecutor executor,
       Parameter arg, Class<?> argType, Method method, Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response, RequestBody requestBody, ModelView mv,
-      Map<Class<?>, Giver> givers) {
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return argType == HttpServletResponse.class;
   }
 
@@ -27,7 +28,8 @@ public class HttpServletResponseProvider implements ArgProvider {
       WebExecutor executor,
       Parameter arg, Class<?> argType, Method method, Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response, RequestBody requestBody, ModelView mv,
-      Map<Class<?>, Giver> givers) {
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return response;
   }
 

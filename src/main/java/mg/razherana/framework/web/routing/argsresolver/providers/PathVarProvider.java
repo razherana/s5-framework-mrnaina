@@ -20,7 +20,8 @@ public class PathVarProvider implements ArgProvider {
       WebExecutor executor,
       Parameter arg, Class<?> argType, Method method, Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response, RequestBody requestBody, ModelView mv,
-      Map<Class<?>, Giver> givers) {
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return arg.isAnnotationPresent(PathVar.class);
   }
 
@@ -29,7 +30,8 @@ public class PathVarProvider implements ArgProvider {
       WebExecutor executor,
       Parameter arg, Class<?> argType, Method method, Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response, RequestBody requestBody, ModelView mv,
-      Map<Class<?>, Giver> givers) {
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     PathVar pathVar = arg.getAnnotation(PathVar.class);
     String varName = pathVar.value();
 

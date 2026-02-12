@@ -19,7 +19,8 @@ public class ServletContextProvider implements ArgProvider {
       WebExecutor executor,
       Parameter arg, Class<?> argType, Method method, Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response, RequestBody requestBody, ModelView mv,
-      Map<Class<?>, Giver> givers) {
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return argType.equals(ServletContext.class);
   }
 
@@ -28,7 +29,8 @@ public class ServletContextProvider implements ArgProvider {
       WebExecutor executor,
       Parameter arg, Class<?> argType, Method method, Map<String, String> pathParameters,
       HttpServletRequest request, HttpServletResponse response, RequestBody requestBody, ModelView mv,
-      Map<Class<?>, Giver> givers) {
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return request.getServletContext();
   }
 

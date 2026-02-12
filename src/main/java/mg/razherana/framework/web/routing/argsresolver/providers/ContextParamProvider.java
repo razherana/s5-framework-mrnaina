@@ -17,16 +17,23 @@ public class ContextParamProvider implements ArgProvider {
   @Override
   public boolean supports(WebExecutor executor, Parameter arg, Class<?> argType, Method method,
       Map<String, String> pathParameters, HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers) {
+      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
     return arg.isAnnotationPresent(mg.razherana.framework.web.annotations.parameters.ContextVar.class);
   }
 
   @Override
   public Object provide(WebExecutor executor, Parameter arg, Class<?> argType, Method method,
       Map<String, String> pathParameters, HttpServletRequest request, HttpServletResponse response,
-      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers) {
-    return ConversionUtils.convertStringToType(request.getServletContext().getInitParameter(
-        arg.getAnnotation(mg.razherana.framework.web.annotations.parameters.ContextVar.class).value()), argType);
+      RequestBody requestBody, ModelView mv, Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext) {
+    Object value = request.getServletContext().getAttribute(
+        arg.getAnnotation(mg.razherana.framework.web.annotations.parameters.ContextVar.class).value());
+
+    if (value instanceof String stringValue)
+      return ConversionUtils.convertStringToType(stringValue, argType);
+
+    return value;
   }
 
 }

@@ -22,7 +22,9 @@ public interface ArgProvider {
       HttpServletResponse response,
       RequestBody requestBody,
       ModelView mv,
-      Map<Class<?>, Giver> givers);
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext
+    );
 
   public Object provide(
       WebExecutor executor,
@@ -34,5 +36,7 @@ public interface ArgProvider {
       HttpServletResponse response,
       RequestBody requestBody,
       ModelView mv,
-      Map<Class<?>, Giver> givers);
+      Map<Class<?>, Giver> givers,
+      Map<String, Object> additionalContext
+    );
 }

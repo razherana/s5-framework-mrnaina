@@ -37,6 +37,9 @@ public class FrontServlet extends HttpServlet {
           + InitKey.BASE_PACKAGE.getKey() + "' parameter.");
     }
 
+    // Scan and load configs before starting the app
+    app.scanConfigs(basePackage, getServletContext());
+
     // Find all controllers at startup
     app.scanControllers(basePackage);
 
@@ -62,12 +65,25 @@ public class FrontServlet extends HttpServlet {
   }
 
   private boolean resourceExists(HttpServletRequest request) {
+    String requestURI = request.getRequestURI();
+    String contextPath = request.getContextPath();
+    String relativePath = requestURI.substring(contextPath.length());
+
     try {
-      URL resource = getServletContext().getResource(request.getRequestURI());
-      return resource != null;
+      URL resource = getServletContext().getResource(relativePath);
+      if (resource != null) {
+        // Check if it's a file (not a directory)
+        String realPath = getServletContext().getRealPath(relativePath);
+        if (realPath != null) {
+          java.io.File file = new java.io.File(realPath);
+          return file.isFile(); // Only return true for files, not directories
+        }
+        return false;
+      }
     } catch (MalformedURLException e) {
       return false;
     }
+    return false;
   }
 
   @Override
