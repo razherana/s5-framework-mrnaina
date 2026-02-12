@@ -123,7 +123,12 @@ public class RouteUtil extends JspUtil {
       finalPath.append(String.join("&", queryParts));
     }
 
-    return finalPath.toString();
+    // Remove trailing slash if exists
+    String result = finalPath.toString();
+    result = WebMapper.normalizePath(result);
+    result = "/" + result + "/";
+
+    return result;
   }
 
   ControllerContainer findControllerByAlias(String alias, List<ControllerContainer> controllerContainers) {
