@@ -48,9 +48,13 @@ import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.JspUtil;
 import mg.razherana.framework.web.utils.proxies.MethodInterceptor;
+import mg.razherana.framework.web.utils.sessionflash.SessionFlashMiddleware;
 
 public class WebExecutor {
   private static final ArgResolver argResolver = new ArgResolver();
+
+  private static final List<Class<?>> GLOBAL_MIDDLEWARES = List.of(
+      SessionFlashMiddleware.class);
 
   static {
     // Register default providers
@@ -425,6 +429,10 @@ public class WebExecutor {
     Middlewares methodMiddlewaresAnnot = method.getAnnotation(Middlewares.class);
 
     Set<Class<?>> middlewareClasses = new HashSet<>();
+
+    // Add global middlewares
+    middlewareClasses.addAll(
+        GLOBAL_MIDDLEWARES);
 
     if (middlewaresAnnot != null) {
       middlewareClasses = new HashSet<>(Arrays.asList(middlewaresAnnot.value()));

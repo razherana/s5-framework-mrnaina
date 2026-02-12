@@ -150,7 +150,7 @@ public class RouteUtil extends JspUtil {
       String urlAlias = routingContainer.getRoutingAnnotation().alias();
 
       if (urlAlias.trim().isEmpty())
-        urlAlias = routingContainer.getMethodReflection().getName().toLowerCase();
+        urlAlias = routingContainer.getMethodReflection().getName();
 
       if (urlAlias.equals(alias)) {
         return routingContainer;

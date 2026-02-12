@@ -21,21 +21,11 @@ public abstract class Middleware implements MotherResolv {
   abstract public Object before();
 
   /**
-   * Method that should be ran in afterResponse.
+   * Method to be executed after the controller's method.
    * 
-   * @return The object to send to {@link #afterResponse(Object)}
+   * @return Null to continue the execution chain, or an object to short-circuit
+   *         the execution and return that object as the response.
    */
   @Resolve
   abstract public Object after();
-
-  /**
-   * Method to be executed after the controller's method.
-   * 
-   * @param controllerResponse The response from the controller's method.
-   * @return The modified response to send back to the client. Null means no
-   *         modification.
-   */
-  public Object afterResponse(Object controllerResponse) {
-    return null;
-  }
 }

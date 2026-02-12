@@ -1,6 +1,8 @@
 package mg.razherana.framework.web.utils;
 
 import java.io.IOException;
+import java.util.Map;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -11,6 +13,7 @@ import mg.razherana.framework.web.utils.http.RequestBody;
 import mg.razherana.framework.web.utils.http.ResponseBody;
 import mg.razherana.framework.web.utils.json.types.JsonElement;
 import mg.razherana.framework.web.utils.jsp.defaults.RouteUtil;
+import mg.razherana.framework.web.utils.sessionflash.SessionFlashMiddleware;
 
 public class ModelView {
   private final HttpServletRequest request;
@@ -218,17 +221,28 @@ public class ModelView {
   }
 
   /**
-   * Flash an attribute for the next request. 
-   * The attribute will be removed from the session after being accessed in the next request.
+   * Flash an attribute for the next request.
+   * The attribute will be removed from the session after being accessed in the
+   * next request.
    * 
    * @param name
    * @param value
    */
   public void flash(String name, Object value) {
-    request.getSession(true).setAttribute(name, value);
-  }
+    final String key = SessionFlashMiddleware.FLASH_SESSION_KEY;
 
-  
+    // Set it to the session flash map
+    Map<String, Object> map = session(key);
+
+    if (map == null) {
+      // Create a new map
+      map = new java.util.HashMap<>();
+    }
+
+    map.put(name, value);
+
+    session(key, map);
+  }
 
   public HttpServletRequest getRequest() {
     return request;

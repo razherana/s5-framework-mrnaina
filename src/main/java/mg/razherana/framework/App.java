@@ -30,6 +30,7 @@ import mg.razherana.framework.web.utils.jsp.defaults.AttributeUtil;
 import mg.razherana.framework.web.utils.jsp.defaults.RouteUtil;
 import mg.razherana.framework.web.utils.jsp.preprocessor.ManualJSPPreprocessor;
 import mg.razherana.framework.web.utils.proxies.MotherResolv;
+import mg.razherana.framework.web.utils.sessionflash.SessionFlashMiddleware;
 
 /**
  * Contains all core infos for the framework
@@ -37,7 +38,9 @@ import mg.razherana.framework.web.utils.proxies.MotherResolv;
 public class App {
 
   public static final Set<Class<?>> FRAMEWORK_LOADED_RESOLV_CLASSES = Set.of(
-      Authenticated.class);
+      Authenticated.class,
+      SessionFlashMiddleware.class
+    );
 
   public static enum InitKey {
     BASE_PACKAGE("basePackage"),
