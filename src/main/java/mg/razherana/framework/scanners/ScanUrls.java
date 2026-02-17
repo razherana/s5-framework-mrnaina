@@ -5,11 +5,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import mg.razherana.framework.web.annotations.Url;
+import mg.razherana.framework.web.utils.ReflectUtils;
 
 class ScanUrls {
   static List<Method> findUrlMethodsInController(Class<?> clazz) {
     // Get all methods of the class
-    Method[] methods = clazz.getDeclaredMethods();
+    List<Method> methods = ReflectUtils.getAllMethods(clazz, Object.class);
     List<Method> urlMethods = new ArrayList<>();
 
     // Iterate through methods and check for @Url annotation
