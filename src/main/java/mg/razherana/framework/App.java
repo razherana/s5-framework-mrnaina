@@ -3,11 +3,16 @@ package mg.razherana.framework;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Vector;
+import java.util.stream.Stream;
 
 import jakarta.servlet.ServletContext;
 import mg.razherana.framework.configs.AppConfigLoader;
@@ -28,7 +33,8 @@ import mg.razherana.framework.web.routing.WebMapper;
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 import mg.razherana.framework.web.utils.jsp.defaults.AttributeUtil;
 import mg.razherana.framework.web.utils.jsp.defaults.RouteUtil;
-import mg.razherana.framework.web.utils.jsp.preprocessor.ManualJSPPreprocessor;
+import mg.razherana.framework.web.utils.jsp.preprocessor.AbstractJSPPreprocessor;
+import mg.razherana.framework.web.utils.jsp.preprocessor.JSPUtilsPreprocessor;
 import mg.razherana.framework.web.utils.proxies.MotherResolv;
 import mg.razherana.framework.web.utils.sessionflash.SessionFlashMiddleware;
 
@@ -37,16 +43,18 @@ import mg.razherana.framework.web.utils.sessionflash.SessionFlashMiddleware;
  */
 public class App {
 
+  public static final List<Class<? extends AbstractJSPPreprocessor>> DEFAULT_JSP_PREPROCESSORS = List.of(
+      JSPUtilsPreprocessor.class);
+
   public static final Set<Class<?>> FRAMEWORK_LOADED_RESOLV_CLASSES = Set.of(
       Authenticated.class,
-      SessionFlashMiddleware.class
-    );
+      SessionFlashMiddleware.class);
 
   public static enum InitKey {
     BASE_PACKAGE("basePackage"),
     RESPONSE_HANDLERS("responseHandlers"),
     VIEWS_DIRECTORY("viewsDirectory"),
-    JSP_UTILS("jspUtils");
+    JSP_UTILS("jspUtils"), JSP_PREPROCESSORS("jspPreprocessors");
 
     private final String key;
 
@@ -192,8 +200,8 @@ public class App {
         servletContext);
 
     try {
-      int result = ManualJSPPreprocessor.processDirectory(servletContext.getRealPath(viewsDirectory));
-      System.out.println("[Fruits] : Preprocessed " + result + " JSP files.");
+      int result = preprocessJspFiles(servletContext.getRealPath(viewsDirectory), servletContext);
+      System.out.println("[Fruits] : Preprocessed " + result + " JSP files in total.");
     } catch (IOException e) {
       e.printStackTrace();
     }
@@ -208,11 +216,91 @@ public class App {
     }
 
     try {
-      if (new File(servletContext.getRealPath(viewsDirectory)).exists())
-        ManualJSPPreprocessor.restoreBackups(servletContext.getRealPath(viewsDirectory));
+      if (new File(servletContext.getRealPath(viewsDirectory)).exists()) {
+        int restored = restoreJspBackups(servletContext.getRealPath(viewsDirectory));
+        System.out.println("[Fruits] : Restored " + restored + " JSP backups.");
+      }
     } catch (IOException e) {
       e.printStackTrace();
     }
+  }
+
+  private int preprocessJspFiles(String viewsDirectoryPath, ServletContext servletContext) throws IOException {
+    Path viewsPath = Paths.get(viewsDirectoryPath);
+    if (!Files.exists(viewsPath)) {
+      throw new IOException("Directory does not exist: " + viewsDirectoryPath);
+    }
+
+    int count = 0;
+    List<AbstractJSPPreprocessor> preprocessors = createJspPreprocessors(servletContext);
+
+    try (Stream<Path> stream = Files.walk(viewsPath)) {
+      for (Path jspPath : stream.filter(path -> path.toString().endsWith(".jsp")).toList()) {
+        for (AbstractJSPPreprocessor preprocessor : preprocessors) {
+          if (preprocessor.modify(jspPath.toString())) {
+            count++;
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  private int restoreJspBackups(String viewsDirectoryPath) throws IOException {
+    Path viewsPath = Paths.get(viewsDirectoryPath);
+    if (!Files.exists(viewsPath)) {
+      return 0;
+    }
+
+    int restored = 0;
+    try (Stream<Path> stream = Files.walk(viewsPath)) {
+      for (Path backupPath : stream.filter(path -> path.toString().endsWith(".jsp.backup")).toList()) {
+        if (AbstractJSPPreprocessor.restoreBackup(backupPath.toString())) {
+          restored++;
+        }
+      }
+    }
+
+    return restored;
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<AbstractJSPPreprocessor> createJspPreprocessors(ServletContext servletContext) {
+    List<AbstractJSPPreprocessor> preprocessors = new ArrayList<>();
+
+    String preprocessorConfig = (String) servletContext
+        .getAttribute(InitKey.JSP_PREPROCESSORS.getKey());
+
+    Vector<Class<? extends AbstractJSPPreprocessor>> preprocessorClasses = new Vector<>();
+
+    if (preprocessorConfig != null && !preprocessorConfig.trim().isEmpty()) {
+      String[] classNames = preprocessorConfig.split(",");
+      for (String className : classNames) {
+        try {
+          preprocessorClasses.add((Class<? extends AbstractJSPPreprocessor>) Class.forName(className.trim()));
+        } catch (ClassNotFoundException e) {
+          throw new WebExecutionException("Failed to load JSP preprocessor class: " + className, e);
+        }
+      }
+      System.out.println("[Fruits] : Custom JSP preprocessors specified: " + preprocessorClasses);
+    } else {
+      System.out.println("[Fruits] : No custom JSP preprocessors specified. Using default preprocessors : "
+          + DEFAULT_JSP_PREPROCESSORS);
+    }
+
+    preprocessorClasses = preprocessorConfig != null && !preprocessorConfig.isBlank() ? preprocessorClasses : new Vector<>(DEFAULT_JSP_PREPROCESSORS);
+
+    // Add default preprocessors
+    for (Class<? extends AbstractJSPPreprocessor> preprocessorClass : preprocessorClasses) {
+      try {
+        preprocessors.add(preprocessorClass.getDeclaredConstructor().newInstance());
+      } catch (Exception e) {
+        throw new WebExecutionException("Failed to instantiate JSP preprocessor: " + preprocessorClass.getName(), e);
+      }
+    }
+
+    return preprocessors;
   }
 
   private List<String> parseJspUtilConfiguration(String configuration) {

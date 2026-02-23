@@ -4,20 +4,18 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import mg.razherana.framework.web.utils.jsp.JspFunctionBridge;
 
-public class ManualJSPPreprocessor {
+public class JSPUtilsPreprocessor extends AbstractJSPPreprocessor {
 
   private static final String BRIDGE_CALL_INVOCATION = "((" + JspFunctionBridge.class.getName()
       + ") request.getAttribute(\"jspFunctionBridge\"))";
@@ -27,76 +25,23 @@ public class ManualJSPPreprocessor {
       "<%--.*?--%>|<%@.*?%>|<%!.*?%>|<%=.*?%>|<%.*?%>|\\$\\{.*?\\}",
       Pattern.DOTALL);
 
-  public static int processDirectory(String directoryPath) throws IOException {
-    return processDirectory(directoryPath, JspFunctionBridge.getRegisteredViewNames());
-  }
-
-  public static int processDirectory(String directoryPath, Set<String> functionNames) throws IOException {
-    List<String> sanitizedNames = sanitizeFunctionNames(functionNames);
-    if (sanitizedNames.isEmpty()) {
-      return 0;
-    }
-
-    System.out.println("[Fruits] : Processing directory " + directoryPath + " with functions: " + sanitizedNames);
-
-    Path dir = Paths.get(directoryPath);
-    if (!Files.exists(dir)) {
-      throw new IOException("Directory does not exist: " + directoryPath);
-    }
-
-    int count = 0;
-    final List<String> effectiveNames = sanitizedNames;
-    try (Stream<Path> stream = Files.walk(dir)) {
-      count = stream
-          .filter(path -> path.toString().endsWith(".jsp"))
-          .mapToInt(path -> {
-            try {
-              boolean result = processFile(path, effectiveNames);
-              if (result) {
-                System.out.println("[Fruits] : Processed " + path);
-              } else {
-                System.out.println("[Fruits] : No changes for " + path);
-              }
-              return result ? 1 : 0;
-            } catch (IOException e) {
-              System.err.println("Error processing " + path + ": " + e.getMessage());
-              return 0;
-            }
-          })
-          .sum();
-    }
-
-    return count;
-  }
-
-  public static boolean processFile(String filePath) throws IOException {
-    List<String> functionNames = sanitizeFunctionNames(JspFunctionBridge.getRegisteredViewNames());
-    if (functionNames.isEmpty()) {
-      return false;
-    }
-    return processFile(Paths.get(filePath), functionNames);
-  }
-
-  public static boolean processFile(String filePath, Set<String> functionNames) throws IOException {
+  @Override
+  public boolean modify(String filePath, Set<String> functionNames) throws IOException {
     List<String> sanitizedNames = sanitizeFunctionNames(functionNames);
     if (sanitizedNames.isEmpty()) {
       return false;
     }
-    return processFile(Paths.get(filePath), sanitizedNames);
+    return modify(Paths.get(filePath), sanitizedNames);
   }
 
-  private static boolean processFile(Path jspPath, List<String> functionNames) throws IOException {
+  private boolean modify(Path jspPath, List<String> functionNames) throws IOException {
     String content = Files.readString(jspPath);
     String originalContent = content;
 
     content = processFunctionCalls(content, functionNames);
 
     if (!content.equals(originalContent)) {
-      // Create backup
-      Path backupPath = Paths.get(jspPath.toString() + ".backup");
-      if (!Files.exists(backupPath)) {
-        Files.copy(jspPath, backupPath, StandardCopyOption.REPLACE_EXISTING);
-      }
+      AbstractJSPPreprocessor.backup(jspPath.toString());
 
       // Write processed content
       Files.writeString(jspPath, content);
@@ -452,22 +397,5 @@ public class ManualJSPPreprocessor {
       builder.append(current);
     }
     return builder.toString();
-  }
-
-  public static void restoreBackups(String directoryPath) throws IOException {
-    Path dir = Paths.get(directoryPath);
-    try (Stream<Path> stream = Files.walk(dir)) {
-      stream.filter(path -> path.toString().endsWith(".jsp.backup"))
-          .forEach(backupPath -> {
-            try {
-              Path originalPath = Paths.get(backupPath.toString().replace(".backup", ""));
-              Files.copy(backupPath, originalPath, StandardCopyOption.REPLACE_EXISTING);
-              Files.delete(backupPath);
-              System.out.println("Restored: " + originalPath);
-            } catch (IOException e) {
-              System.err.println("Failed to restore: " + backupPath);
-            }
-          });
-    }
   }
 }
