@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 
+import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.annotation.WebServlet;
@@ -74,8 +75,12 @@ public class FrontServlet extends HttpServlet {
       if (resource != null) {
         // Check if it's a file (not a directory)
         String realPath = getServletContext().getRealPath(relativePath);
+        System.out.println("[Fruits] : Checking resource: " + relativePath + " -> real path: " + realPath);
+        System.out.println("[Fruits] : Resource URL: " + resource);
         if (realPath != null) {
           java.io.File file = new java.io.File(realPath);
+          System.out.println("[Fruits] : File exists: " + file.exists() + ", isFile: " + file.isFile()
+              + ", isDirectory: " + file.isDirectory());
           return file.isFile(); // Only return true for files, not directories
         }
         return false;
@@ -86,13 +91,23 @@ public class FrontServlet extends HttpServlet {
     return false;
   }
 
+  private void delegateToDefaultServlet(HttpServletRequest req, HttpServletResponse resp)
+      throws ServletException, IOException {
+    // "default" is the standard static resource servlet name in Tomcat.
+    RequestDispatcher defaultServlet = getServletContext().getNamedDispatcher("default");
+    if (defaultServlet == null) {
+      throw new ServletException("Default servlet not found for static resource dispatch");
+    }
+    defaultServlet.forward(req, resp);
+  }
+
   @Override
   protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
     if (!resourceExists(req)) {
       handleRequest(req, resp);
       return;
     }
-    super.doGet(req, resp);
+    delegateToDefaultServlet(req, resp);
   }
 
   @Override
@@ -101,7 +116,7 @@ public class FrontServlet extends HttpServlet {
       handleRequest(req, resp);
       return;
     }
-    super.doPost(req, resp);
+    delegateToDefaultServlet(req, resp);
   }
 
   @Override
@@ -110,7 +125,7 @@ public class FrontServlet extends HttpServlet {
       handleRequest(req, resp);
       return;
     }
-    super.doPut(req, resp);
+    delegateToDefaultServlet(req, resp);
   }
 
   @Override
@@ -119,7 +134,7 @@ public class FrontServlet extends HttpServlet {
       handleRequest(req, resp);
       return;
     }
-    super.doHead(req, resp);
+    delegateToDefaultServlet(req, resp);
   }
 
   @Override
@@ -128,7 +143,7 @@ public class FrontServlet extends HttpServlet {
       handleRequest(req, resp);
       return;
     }
-    super.doDelete(req, resp);
+    delegateToDefaultServlet(req, resp);
   }
 
   private void handleRequest(HttpServletRequest request, HttpServletResponse response)
