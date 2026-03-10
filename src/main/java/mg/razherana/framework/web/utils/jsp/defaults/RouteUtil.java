@@ -128,6 +128,10 @@ public class RouteUtil extends JspUtil {
     result = WebMapper.normalizePath(result);
     result = "/" + result + "/";
 
+    if(result.equals("//")) {
+      result = "/";
+    }
+
     return result;
   }
 
