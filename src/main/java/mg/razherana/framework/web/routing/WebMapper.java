@@ -3,6 +3,10 @@ package mg.razherana.framework.web.routing;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Vector;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import jakarta.servlet.http.HttpServletRequest;
 import mg.razherana.framework.web.annotations.controllers.Stateful;
 import mg.razherana.framework.web.containers.ControllerContainer;
@@ -184,49 +188,117 @@ public class WebMapper {
       String routingSegment = routingSegments[i];
       String pathSegment = pathSegments[i];
 
-      String matchedSegment = matchSegmentAndReturn(routingSegment, pathSegment);
+      Map<String, String> matchedSegment = matchSegmentAndReturnParameters(routingSegment, pathSegment);
 
       if (matchedSegment == null)
         return null;
 
-      // If we have a path parameter, extract it
-      if (routingSegment.startsWith("[") && routingSegment.endsWith("]")) {
-        String paramName = routingSegment.substring(1, routingSegment.length() - 1).split(":", 2)[0];
-
-        if (paramName.isEmpty())
-          throw new MalformedUserRouteException(
-              "Path parameter name cannot be empty in segment: " + routingSegment + " of route: " + fullRoutingPath);
-
-        pathParameters.put(paramName, matchedSegment);
-      }
+      pathParameters.putAll(matchedSegment);
     }
 
     return pathParameters;
   }
 
-  private String matchSegmentAndReturn(String routingSegment, String pathSegment) {
-    if (routingSegment.startsWith("[") && routingSegment.endsWith("]")) {
-      // We have a path parameter
-      // Check if there is regex constraint
-      String[] splitted = routingSegment.substring(1, routingSegment.length() - 1).split(":", 2);
-      if (splitted.length == 2) {
-        String regex = splitted[1];
-        return pathSegment.matches(regex) ? pathSegment : null;
-      }
-
-      // Else it's a simple parameter
-      return pathSegment;
+  private Map<String, String> matchSegmentAndReturnParameters(String routingSegment, String pathSegment) {
+    if (!routingSegment.contains("[") && !routingSegment.contains("]")) {
+      return routingSegment.equals(pathSegment) ? Map.of() : null;
     }
 
-    return routingSegment.equals(pathSegment) ? pathSegment : null;
+    Map<String, String> parameters = new HashMap<>();
+    Vector<String> paramNames = new Vector<>();
+
+    StringBuilder regexBuilder = new StringBuilder("^");
+    StringBuilder literalBuilder = new StringBuilder();
+    int openBrackets = 0;
+    StringBuilder paramBuilderTemp = new StringBuilder();
+
+    // [p1]-test-[p2]
+    for (int charIndex = 0; charIndex < routingSegment.length(); charIndex++) {
+      char c = routingSegment.charAt(charIndex);
+
+      if (c == '[') {
+        // If we are entering a parameter and we have a literal part before, add it to
+        // the regex
+        if (openBrackets == 0 && literalBuilder.length() > 0) {
+          String literalPart = Pattern.quote(literalBuilder.toString());
+          regexBuilder.append(literalPart);
+          literalBuilder = new StringBuilder();
+
+          System.out
+              .println("[Fruits] : Added literal part to regex: " + literalPart + " for segment: " + routingSegment);
+        }
+
+        openBrackets++;
+
+        if (openBrackets == 1)
+          continue;
+      }
+
+      if (c == ']') {
+        if (openBrackets <= 0) {
+          throw new MalformedUserRouteException("Malformed route: " + routingSegment
+              + ". Unmatched closing bracket ']' at index: " + charIndex);
+        }
+
+        openBrackets--;
+      }
+
+      System.out.println("[Fruits] : Processing char '" + c + "' in segment '" + routingSegment
+          + "'. Open brackets count: " + openBrackets + " regex so far: " + regexBuilder.toString());
+
+      if (openBrackets > 0)
+        paramBuilderTemp.append(String.valueOf(c));
+
+      // If we are outside of brackets, we want to match the literal part of the
+      // segment
+      if (openBrackets == 0) {
+        // If end of a segment
+        if (c == ']') {
+          String paramRegex = paramBuilderTemp.toString();
+
+          // Check if we have a custom regex for the parameter (eg: [id:\d+])
+          String[] splitted = paramRegex.split(":", 2);
+
+          // Default regex to match any segment except '/'
+          String regexPart = splitted.length > 1 && !splitted[1].isBlank() ? splitted[1].trim() : ".+?";
+          regexBuilder.append("(").append(regexPart).append(")");
+
+          paramNames.add(splitted[0].trim());
+
+          paramBuilderTemp = new StringBuilder();
+
+          System.out.println("[Fruits] : End of parameter detected. Added regex part: " + regexPart + " for parameter: "
+              + splitted[0].trim());
+
+          continue;
+        }
+
+        // Else it's a literal string
+        literalBuilder.append(c);
+      }
+    }
+
+    regexBuilder.append("$");
+
+    System.out.println("[Fruits] : Matching segment '" + routingSegment + "' against path segment '" + pathSegment
+        + "' with regex: " + regexBuilder.toString());
+
+    Pattern pattern = Pattern.compile(regexBuilder.toString());
+    Matcher matcher = pattern.matcher(pathSegment);
+
+    if (!matcher.matches())
+      return null;
+
+    for (int i = 0; i < paramNames.size(); i++)
+      parameters.put(paramNames.get(i), matcher.group(i + 1));
+
+    return parameters;
   }
 
   private WebRouteContainer checkPathMatchAndExtractParameters(String fullRoutingPath, String path, Method method,
       Object controllerInstance, ControllerContainer controllerContainer) {
 
     HashMap<String, String> pathParameters = extractPathParameters(fullRoutingPath, path);
-
-    System.out.println("[Fruits] : Path param is " + pathParameters);
 
     if (pathParameters != null) {
       return new WebRouteContainer(method,
