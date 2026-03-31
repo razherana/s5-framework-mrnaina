@@ -101,13 +101,12 @@ public class WebExecutor {
       HttpServletResponse response,
       RequestBody requestBody,
       ModelView mv,
-      Map<Class<?>, Giver> givers) throws IOException, ServletException {
-    Parameter[] args = method.getParameters();
+      Map<Class<?>, Giver> givers,
+      Parameter[] parameters) throws IOException, ServletException {
+    Object[] argInstances = new Object[parameters.length];
 
-    Object[] argInstances = new Object[args.length];
-
-    for (int i = 0; i < args.length; i++) {
-      Parameter arg = args[i];
+    for (int i = 0; i < parameters.length; i++) {
+      Parameter arg = parameters[i];
       Class<?> argType = arg.getType();
 
       argInstances[i] = argResolver.resolveArgument(
@@ -192,7 +191,7 @@ public class WebExecutor {
         .map(Class::getName).reduce((a, b) -> a + ", " + b).orElse("none"));
 
     Object[] methodArgs = WebExecutor.resolveArgs(this, method, pathParameters,
-        request, response, requestBody, mv, givers);
+        request, response, requestBody, mv, givers, method.getParameters());
 
     Object middlewareBeforeResult = null;
 

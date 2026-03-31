@@ -3,6 +3,7 @@ package mg.razherana.framework.web.utils.proxies;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,6 +22,7 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.implementation.bind.annotation.AllArguments;
 import net.bytebuddy.implementation.bind.annotation.FieldValue;
 import net.bytebuddy.implementation.bind.annotation.Origin;
 import net.bytebuddy.implementation.bind.annotation.RuntimeType;
@@ -42,8 +44,7 @@ public class MethodInterceptor {
       Class<?> current = startClass;
       while (current != null && current != stopAt) {
         if (target.isAbstract()
-            && target.getDeclaredAnnotations().isAnnotationPresent(Resolve.class)
-            && target.getParameters().isEmpty())
+            && target.getDeclaredAnnotations().isAnnotationPresent(Resolve.class))
           return true;
 
         current = current.getSuperclass();
@@ -56,7 +57,8 @@ public class MethodInterceptor {
   public static Object intercept(
       @This Object self,
       @Origin Method method,
-      @FieldValue("context____________") InterceptorContext context) throws Exception {
+      @FieldValue("context____________") InterceptorContext context,
+      @AllArguments Object[] originalArgs) throws Exception {
 
     Class<?> resolvClass = self.getClass().getSuperclass();
 
@@ -66,7 +68,7 @@ public class MethodInterceptor {
         .getWebFinder()
         .getResolvContainers()
         .get(resolvClass);
-        
+
     if (containers != null) {
       ResolvContainer resolvContainer = null;
       for (ResolvContainer container : containers)
@@ -81,10 +83,27 @@ public class MethodInterceptor {
 
       Method implMethod = resolvContainer.getImplMethod();
 
-      Object[] args = WebExecutor.resolveArgs(context.executor(), implMethod, context.pathParameters(),
-          context.request(), context.response(), context.requestBody(), context.mv(), context.givers());
+      if (implMethod == null)
+        throw new IllegalStateException("No implementation method found for " + method.getName());
 
-      return implMethod.invoke(self, args);
+      Parameter[] implParams = implMethod.getParameters();
+      Parameter[] toResolve = new Parameter[implParams.length - originalArgs.length];
+
+      for (int i = originalArgs.length; i < implParams.length; i++)
+        toResolve[i - originalArgs.length] = implParams[i];
+
+      Object[] newArgs = WebExecutor.resolveArgs(context.executor(), implMethod, context.pathParameters(),
+          context.request(), context.response(), context.requestBody(), context.mv(), context.givers(), toResolve);
+
+      Object[] allArgs = new Object[originalArgs.length + newArgs.length];
+
+      for (int i = 0; i < originalArgs.length; i++)
+        allArgs[i] = originalArgs[i];
+
+      for (int i = originalArgs.length; i < allArgs.length; i++)
+        allArgs[i] = newArgs[i - originalArgs.length];
+
+      return implMethod.invoke(self, allArgs);
     }
 
     throw new IllegalStateException("No ResolvContainer found for " + self.getClass().getSuperclass().getName());

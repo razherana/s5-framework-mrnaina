@@ -84,6 +84,7 @@ public final class WebFinder {
       Map<String, Method> implMethods = new HashMap<>();
       Map<String, Method> resolveMethods = new HashMap<>();
 
+      // Handle Impl first
       for (Method method : methods) {
         // Check if Impl
         Impl implAnnotation = method.getAnnotation(Impl.class);
@@ -125,10 +126,18 @@ public final class WebFinder {
 
           implMethods.put(name, method);
         }
+      }
 
+      // Then handle Resolve and check for errors with Impl
+      for (Method method : methods) {
         // Check if Resolve
         Resolve resolveAnnotation = method.getAnnotation(Resolve.class);
         if (resolveAnnotation != null) {
+          String name = resolveAnnotation.value().isEmpty() ? method.getName() : resolveAnnotation.value();
+          System.out.println(
+              "#[Fruits] : Impl methods " + implMethods + " and resolve method " + method + " and name " + name);
+          Method implMethod = implMethods.get(name);
+
           // Check first if abstract
           if (!Modifier.isAbstract(method.getModifiers())) {
             throw new WebMappingException(
@@ -136,14 +145,40 @@ public final class WebFinder {
                     + " must be abstract.");
           }
 
-          // Check if there are parameters to the @Resolve method
-          if (method.getParameterCount() != 0) {
+          // Check if there are parameters to the @Resolve method and they should be <=
+          // impl parameters.
+          // Else there are missing parameters in the @Impl
+          if (method.getParameterCount() > implMethod.getParameterCount()) {
             throw new WebMappingException(
-                "The @Resolve method " + method.getName() + " in resolv " + resolvClass
-                    + " must not have parameters.");
+                "The @Impl method " + implMethod.getName() + " in resolv " + resolvClass
+                    + " must have the existing parameters of the @Resolve method " + method.getName()
+                    + " or have more parameters. Found " + method.getParameterCount() + " parameters, expected at most "
+                    + implMethod.getParameterCount());
           }
 
-          String name = resolveAnnotation.value().isEmpty() ? method.getName() : resolveAnnotation.value();
+          // Check that the return type of the @Impl method is assignable to the return
+          // type of the @Resolve method
+          if (!method.getReturnType().isAssignableFrom(implMethod.getReturnType()))
+            throw new WebMappingException(
+                "The return type of the @Impl method " + implMethod.getName() + " in resolv " + resolvClass
+                    + " must be assignable to the return type of the @Resolve method " + method.getName()
+                    + ". Found return type " + implMethod.getReturnType().getName() + ", expected assignable to "
+                    + method.getReturnType().getName());
+
+          // Check that the @Resolv parameters are the same as the first parameters of the
+          // @Impl method
+          Class<?>[] resolveParams = method.getParameterTypes();
+          Class<?>[] implParams = implMethod.getParameterTypes();
+
+          for (int i = 0; i < resolveParams.length; i++) {
+            if (!resolveParams[i].isAssignableFrom(implParams[i]))
+              throw new WebMappingException(
+                  "The parameter " + (i + 1) + " of the @Impl method " + implMethod.getName() + " in resolv "
+                      + resolvClass + " must be assignable to the parameter " + (i + 1) + " of the @Resolve method "
+                      + method.getName() + ". Found parameter type " + implParams[i].getName()
+                      + ", expected assignable to "
+                      + resolveParams[i].getName());
+          }
 
           // We do not check for duplicate resolve names here because
           // a resolve can map to multiple impls (overloading)
@@ -183,7 +218,8 @@ public final class WebFinder {
 
         resolvContainers.get(resolvClass).add(resolvContainer);
 
-        System.out.println("[Fruits] : Registered resolv container " + resolvContainer.getResolveMethod() + " - " + resolvContainer.getImplMethod() + " for resolv "
+        System.out.println("[Fruits] : Registered resolv container " + resolvContainer.getResolveMethod() + " - "
+            + resolvContainer.getImplMethod() + " for resolv "
             + resolvClass.getName());
       }
     }
